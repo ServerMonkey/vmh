@@ -1,0 +1,24 @@
+#!/bin/sh
+#info: Enable VMH in syslog
+
+# must run as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo 'This script must be run as root!' >&2
+    exit 1
+fi
+
+# already enabled
+if [ -f "/etc/rsyslog.d/99-vmhandler.conf" ]; then
+    exit 0
+fi
+
+echo ":syslogtag, startswith, \"vmhandler\" /var/log/vmhandler.log
+& stop
+" >"/etc/rsyslog.d/99-vmhandler.conf"
+
+if [ -z "$(command -v systemctl)" ]; then
+    echo "systemctl not found. Please restart the rsyslog service manually."
+    exit 1
+fi
+
+systemctl restart rsyslog.service
