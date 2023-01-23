@@ -11,10 +11,11 @@ vmh(1) -- Virtual Machine Handler, Virsh CLI wrapper with extra features
 Virsh CLI wrapper with extra features.
 
 * Mass and parallel deployment of domains
+* Automatic deployment of virtual networks
 * Create/compress/import/export images that use disk chains
 * More verifications and better error handeling than plain virsh
 * More automation, e.g. auto shutdown and then force shutdown after a timeout
-* More scriptable than plain virsh, e.g. wait for SSH before next action
+* Wait for SSH to become available
 * Logging system (rsyslog)
 * Useful for automating kiosk applications that use VMs
 
@@ -46,6 +47,13 @@ Use the `<action>` variable to manipulate domains in different ways.
 * `destroy <DOMAIN>` : Hard shutdown the domain.
 * `erase <DOMAIN>` : 'destroy', remove all disk chains and undefine the domain.
   Will also remove the host from the /etc/hosts file.
+* `erase-net <DOMAIN>` : Erases all virtual networks defined in a domains
+  template XML, not the deployed domain. Use this if there are no more domains
+  that require a certain network. Or use it if you made changes to a networks
+  XML file, in the `IMMUTABLE/networks` folder. Then reimport the network via
+  'import-...' or 'env-deploy' . Remember domains that where active during
+  deletion of a network, require a full shutdown and start, to reload the new
+  network settings.
 * `export-copy <DOMAIN_DESTINATION> <DOMAIN>` : 'shutdown', export the domain,
   XML and an exact disk copy. Will not strip snapshots or old disk data.
   Largest file. Only recommendet if image is already compressed. Most
@@ -60,9 +68,10 @@ Use the `<action>` variable to manipulate domains in different ways.
   template XML found in the IMMUTABLE folder. Automatically detects and links
   disk chains to libvirts POOL folder. Also adds as a new disk to the chain.
   Requires two files: The disk image with the name 'DOMAIN' and a libvirt
-  compatible XML named 'DOMAIN.xml'.
+  compatible XML named 'DOMAIN.xml'. Will automatical import and start networks
+  from XMLs found in `<PATH_IMMUTABLE>/networks/<NETWORK>.xml` .
 * `import-chain-start <DOMAIN_DESTINATION> <DOMAIN>` : Same as 'import-chain'
-  and 'start'.
+  and 'start'. This is true for all 'import-...' actions.
 * `import-chain-start-wait <DOMAIN_DESTINATION> <DOMAIN>` : Same as '
   import-chain', 'start' and 'wait'.
 * `import-clone <DOMAIN_DESTINATION> <DOMAIN>` : Define a domain from a
@@ -89,9 +98,14 @@ Use the `<action>` variable to manipulate domains in different ways.
   success will automatically add/update the host to the /etc/hosts file.
 * `env-deploy <ENVIRONMENT>` : Smart deploy multible domains in parallel or/and
   in series. Iterates through the file: `<PATH_IMMUTABLE>/<ENVIRONMENT>.csv` .
+  Will automatical import and start networks from XMLs, found
+  in `<PATH_IMMUTABLE>/networks/<NETWORK>.xml` .
   See 'ENVIRONMENT FILE STRUCTURE'. Based on 'import-chain-start' and 'wait'.
 * `env-erase <ENVIRONMENT>` : Works in reverse to 'env-deploy'. Based on the
   action 'erase'. Requires the ENVIRONMENT file.
+* `env-erase-net <ENVIRONMENT>` : Erase all networks found in an environment
+  CSV. Based on the action 'erase-net'. Requires the ENVIRONMENT file.
+* `env-erase-full` : Same as 'env-erase' and then 'env-erase-net' combined.
 * `env-wait <ENVIRONMENT>` : Based on the action 'wait'. Requires the
   ENVIRONMENT file. Can be used to quickly test/verify an already deployed
   environment.
