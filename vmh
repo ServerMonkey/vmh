@@ -5,60 +5,60 @@
 ### ARGUMENTS #################################################################
 
 if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    man vmh.1 || ronn -r <README.md | man -l -
-    exit
+	man vmh.1 || ronn -r <README.md | man -l -
+	exit
 fi
 
 # must run as root
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Must run as root!"
-    exit 1
+	echo "Must run as root!"
+	exit 1
 fi
 
 ACTION="$1"
 if [ -z "$ACTION" ]; then
-    echo "ACTION parameter can not be empty"
-    exit 1
+	echo "ACTION parameter can not be empty"
+	exit 1
 fi
 if echo "$ACTION" | grep -q '^-?*'; then
-    echo "Wrong input format for ACTION"
-    exit 1
+	echo "Wrong input format for ACTION"
+	exit 1
 fi
 
 DOMAIN_SRC="$2"
 if [ -z "$DOMAIN_SRC" ]; then
-    echo "DOMAIN_SRC parameter can not be empty"
-    exit 1
+	echo "DOMAIN_SRC parameter can not be empty"
+	exit 1
 fi
 if echo "$DOMAIN_SRC" | grep -q '^-?*'; then
-    echo "Wrong input format for DOMAIN_SRC"
-    exit 1
+	echo "Wrong input format for DOMAIN_SRC"
+	exit 1
 fi
 
 DOMAIN_DES="$3"
 
 # autoname domain
 if [ -z "$DOMAIN_DES" ]; then
-    DOMAIN_DES="$DOMAIN_SRC"
+	DOMAIN_DES="$DOMAIN_SRC"
 fi
 
 # variable DOMAIN_DES
 if [ -z "$DOMAIN_DES" ]; then
-    DOMAIN_DES="$DOMAIN_SRC"
+	DOMAIN_DES="$DOMAIN_SRC"
 fi
 
 ### BASIC FUNCTIONS ###########################################################
 
 error() {
-    logger -t "vmhandler" "ERROR:   $DOMAIN_SRC: $1"
-    echo "${RED}[$DOMAIN_SRC] aborting, ERROR:${NOCOL} $1" >&2
-    exit 1
+	logger -t "vmhandler" "ERROR:   $DOMAIN_SRC: $1"
+	echo "${RED}[$DOMAIN_SRC] aborting, ERROR:${NOCOL} $1" >&2
+	exit 1
 }
 
 require_app() {
-    if [ -z "$(command -v "$1")" ]; then
-        error "$1 does not seem to be installed."
-    fi
+	if [ -z "$(command -v "$1")" ]; then
+		error "$1 does not seem to be installed."
+	fi
 }
 
 ### VARIABLES #################################################################
@@ -74,178 +74,182 @@ XML_TAG_DISK_AND_DVD="domain/devices/disk/source/@file"
 XML_TAG_DISK="domain/devices/disk[@device='disk']/source/@file"
 XML_TAG_NET="domain/devices/interface/source/@network"
 
-POOL_PH="/POOL_PATH_PLACEHOLDER/"
+POOL_PLHO="/POOL_PATH_PLACEHOLDER/"
 
 require_app virsh
 
 # variable PATH_POOL
 PATH_POOL=$(virsh pool-dumpxml default | grep -Po "(?<=path\>)[^<]+")
 if [ -z "$PATH_POOL" ]; then
-    error "Can not find default pool"
+	error "Can not find default pool"
 fi
 
 # variable CONF
 CONF="/etc/vmh.conf"
 if [ ! -f "$CONF" ]; then
-    error "$CONF does not exist"
+	error "$CONF does not exist"
 fi
 
 # variable PATH_IMMUTABLE
 while read -r line; do
-    if echo "$line" | grep -q '^PATH_IMMUTABLE=?*'; then
-        PATH_IMMUTABLE=$(echo "$line" | awk -F "=" '{print $2}')
-    elif echo "$line" | grep -q '^ADMIN_NETWORKS=?*'; then
-        ADMIN_NETWORKS=$(echo "$line" | awk -F "=" '{print $2}')
-    elif echo "$line" | grep -q '^DEBUG=?*'; then
-        DEBUG_FLAG=$(echo "$line" | awk -F "=" '{print $2}')
-    fi
+	if echo "$line" | grep -q '^PATH_IMMUTABLE=?*'; then
+		PATH_IMMUTABLE=$(echo "$line" | awk -F "=" '{print $2}')
+	elif echo "$line" | grep -q '^ADMIN_NETWORKS=?*'; then
+		ADMIN_NETWORKS=$(echo "$line" | awk -F "=" '{print $2}')
+	elif echo "$line" | grep -q '^DEBUG=?*'; then
+		DEBUG_FLAG=$(echo "$line" | awk -F "=" '{print $2}')
+	fi
 done <"$CONF"
 
 # verify and set default config
 if [ -z "$PATH_IMMUTABLE" ]; then
-    error "Empty variable 'PATH_IMMUTABLE=' in '$CONF'"
+	error "Empty variable 'PATH_IMMUTABLE=' in '$CONF'"
 else
-    mkdir -p "$PATH_IMMUTABLE" 1>&2 || error "mkdir $PATH_IMMUTABLE"
+	mkdir -p "$PATH_IMMUTABLE" 1>&2 || error "mkdir $PATH_IMMUTABLE"
 fi
 if [ -z "$ADMIN_NETWORKS" ]; then
-    error "Empty variable 'ADMIN_NETWORKS=' in '$CONF'"
+	error "Empty variable 'ADMIN_NETWORKS=' in '$CONF'"
 fi
 if [ "$DEBUG_FLAG" = "true" ]; then
-    DEBUG="--debug"
+	DEBUG="--debug"
 fi
+
+# default owner, follow symlinks
+OWNER_IMMUTABLE=$(stat -Lc "%U:%G" "$PATH_IMMUTABLE")
+OWNER_POOL=$(stat -Lc "%U:%G" "$PATH_POOL")
 
 ### FUNCTIONS #################################################################
 
 warn() {
-    logger -t "vmhandler" "WARNING: $DOMAIN_SRC: $1"
-    echo "${YELLOW}[$DOMAIN_SRC]${NOCOL} aborting, warning: $1" >&2
-    exit 1
+	logger -t "vmhandler" "WARNING: $DOMAIN_SRC: $1"
+	echo "${YELLOW}[$DOMAIN_SRC]${NOCOL} aborting, warning: $1" >&2
+	exit 1
 }
 
 warn_cont() {
-    logger -t "vmhandler" "WARNING: $DOMAIN_SRC: $1"
-    echo "${YELLOW}[$DOMAIN_SRC]${NOCOL} warning: $1" >&2
+	logger -t "vmhandler" "WARNING: $DOMAIN_SRC: $1"
+	echo "${YELLOW}[$DOMAIN_SRC]${NOCOL} warning: $1" >&2
 }
 
 info() {
-    logger -t "vmhandler" "INFO:    $DOMAIN_SRC: $1"
-    echo "${GREEN}[$DOMAIN_SRC]${NOCOL} $1" >&2
+	logger -t "vmhandler" "INFO:    $DOMAIN_SRC: $1"
+	echo "${GREEN}[$DOMAIN_SRC]${NOCOL} $1" >&2
 }
 
 pretty_print_chain() {
-    echo "--> $1" | head -c -1 | tr '\n' ':' | sed 's/:/ --> /g'
+	echo "--> $1" | head -c -1 | tr '\n' ':' | sed 's/:/ --> /g'
 }
 
 debug() {
-    if [ "$DEBUG" = "--debug" ]; then
-        logger -t "vmhandler" "DEBUG:   $DOMAIN_SRC:   $1"
-    fi
+	if [ "$DEBUG" = "--debug" ]; then
+		logger -t "vmhandler" "DEBUG:   $DOMAIN_SRC:   $1"
+	fi
 }
 
 debug_funct() {
-    if [ "$DEBUG" = "--debug" ]; then
-        logger -t "vmhandler" "DEBUG:   $DOMAIN_SRC:   ------ $1"
-    fi
+	if [ "$DEBUG" = "--debug" ]; then
+		logger -t "vmhandler" "DEBUG:   $DOMAIN_SRC:   ------ $1"
+	fi
 }
 
 require_domain_des() {
-    if [ -z "$DOMAIN_DES" ]; then
-        echo "DOMAIN_DES parameter can not be empty"
-        exit 1
-    fi
+	if [ -z "$DOMAIN_DES" ]; then
+		echo "DOMAIN_DES parameter can not be empty"
+		exit 1
+	fi
 }
 
 require_is_imported() {
-    if [ -z "$1" ]; then
-        error "require_is_imported: variable is unset or empty"
-    fi
-    if ! is_imported "$1"; then
-        warn "Domain does not exist"
-    fi
+	if [ -z "$1" ]; then
+		error "require_is_imported: variable is unset or empty"
+	fi
+	if ! is_imported "$1"; then
+		warn "Domain does not exist"
+	fi
 }
 
 require_is_not_imported() {
-    if [ -z "$1" ]; then
-        error "require_is_not_imported: variable is unset or empty"
-    fi
-    if is_imported "$1"; then
-        warn "Already imported"
-    fi
+	if [ -z "$1" ]; then
+		error "require_is_not_imported: variable is unset or empty"
+	fi
+	if is_imported "$1"; then
+		warn "Already imported"
+	fi
 }
 
 require_is_shutdown() {
-    if [ -z "$1" ]; then
-        error "require_is_shutdown: variable is unset or empty"
-    fi
-    if ! is_shutdown "$1"; then
-        exit 1
-    fi
+	if [ -z "$1" ]; then
+		error "require_is_shutdown: variable is unset or empty"
+	fi
+	if ! is_shutdown "$1"; then
+		exit 1
+	fi
 }
 
 require_is_running() {
-    if [ -z "$1" ]; then
-        error "require_is_running: variable is unset or empty"
-    fi
-    if ! is_running "$1"; then
-        exit 1
-    fi
+	if [ -z "$1" ]; then
+		error "require_is_running: variable is unset or empty"
+	fi
+	if ! is_running "$1"; then
+		exit 1
+	fi
 }
 
 is_not_exported() {
-    local DOM="$1"
-    local EXPORTED_DISK="$PATH_IMMUTABLE/$DOM"
-    local EXPORTED_XML="$PATH_IMMUTABLE/$DOM.xml"
-    local INFO_RM=", erase with 'vmh purge-immutable $DOM'"
+	local DOM="$1"
+	local EXPORTED_DISK="$PATH_IMMUTABLE/$DOM"
+	local EXPORTED_XML="$PATH_IMMUTABLE/$DOM.xml"
+	local INFO_RM=", erase with 'vmh purge-immutable $DOM'"
 
-    # prevent accidental overwriting of existing exports
-    if [ -f "$EXPORTED_DISK" ]; then
-        warn "Exported disk already exist$INFO_RM"
-    fi
-    if [ -f "$EXPORTED_XML" ]; then
-        warn "Exported XML already exist$INFO_RM"
-    fi
+	# prevent accidental overwriting of existing exports
+	if [ -f "$EXPORTED_DISK" ]; then
+		warn "Exported disk already exist$INFO_RM"
+	fi
+	if [ -f "$EXPORTED_XML" ]; then
+		warn "Exported XML already exist$INFO_RM"
+	fi
 }
 
 is_imported() {
-    if [ -z "$1" ]; then
-        error "is_imported: variable is unset or empty"
-    fi
+	if [ -z "$1" ]; then
+		error "is_imported: variable is unset or empty"
+	fi
 
-    if virsh -q list --all --name | grep -qx "$1"; then
-        debug "'$1' is defined"
-        return 0
-    else
-        debug "'$1' is undefined"
-        return 1
-    fi
+	if virsh -q list --all --name | grep -qx "$1"; then
+		debug "'$1' is defined"
+		return 0
+	else
+		debug "'$1' is undefined"
+		return 1
+	fi
 }
 
 is_running() {
-    if [ -z "$1" ]; then
-        error "is_running: variable is unset or empty"
-    fi
+	if [ -z "$1" ]; then
+		error "is_running: variable is unset or empty"
+	fi
 
-    if virsh -q list --name --state-running | grep -qx "$1"; then
-        debug "'$1' is running"
-        return 0
-    else
-        debug "'$1' is not running"
-        return 1
-    fi
+	if virsh -q list --name --state-running | grep -qx "$1"; then
+		debug "'$1' is running"
+		return 0
+	else
+		debug "'$1' is not running"
+		return 1
+	fi
 }
 
 is_shutdown() {
-    if [ -z "$1" ]; then
-        error "is_shutdown: variable is unset or empty"
-    fi
+	if [ -z "$1" ]; then
+		error "is_shutdown: variable is unset or empty"
+	fi
 
-    if virsh -q list --name --state-shutoff | grep -qx "$1"; then
-        debug "'$1' is shutdown"
-        return 0
-    else
-        debug "'$1' is not shutdown"
-        return 1
-    fi
+	if virsh -q list --name --state-shutoff | grep -qx "$1"; then
+		debug "'$1' is shutdown"
+		return 0
+	else
+		debug "'$1' is not shutdown"
+		return 1
+	fi
 }
 
 # todo: remove?
@@ -267,422 +271,439 @@ is_shutdown() {
 #}
 
 get_main_disk_info() {
-    local DOM="$1"
-    debug_funct "get_main_disk_info $DOM"
-    # todo: this requires a runnings domain, replace so that it can read
-    # todo: from offline domains, e.g. XMl files
-    virsh -q domblklist "$DOM" --details | grep " disk "
+	local DOM="$1"
+	debug_funct "get_main_disk_info $DOM"
+	# todo: this requires a runnings domain, replace so that it can read
+	# todo: from offline domains, e.g. XMl files
+	virsh -q domblklist "$DOM" --details | grep " disk "
 }
 
 get_running_block_device() {
-    local DOM="$1"
-    debug_funct "get_running_block_device $DOM"
+	local DOM="$1"
+	debug_funct "get_running_block_device $DOM"
 
-    # todo: this only uses the first disk, change to iterate over all disks
-    local DISK_INFO
-    DISK_INFO=$(get_main_disk_info "$DOM") || exit 1
-    local FIRST_BLOCK_DEVICE
-    FIRST_BLOCK_DEVICE=$(echo "$DISK_INFO" | head -n1 | awk '{print $3}')
-    debug "FIRST_BLOCK_DEVICE $FIRST_BLOCK_DEVICE"
+	# todo: this only uses the first disk, change to iterate over all disks
+	local DISK_INFO
+	DISK_INFO=$(get_main_disk_info "$DOM") || exit 1
+	local FIRST_BLOCK_DEVICE
+	FIRST_BLOCK_DEVICE=$(echo "$DISK_INFO" | head -n1 | awk '{print $3}')
+	debug "FIRST_BLOCK_DEVICE $FIRST_BLOCK_DEVICE"
 
-    # verify variable
-    if [ -z "$FIRST_BLOCK_DEVICE" ]; then
-        error "Can not find any block device"
-    else
-        echo "$FIRST_BLOCK_DEVICE"
-    fi
+	# verify variable
+	if [ -z "$FIRST_BLOCK_DEVICE" ]; then
+		error "Can not find any block device"
+	else
+		echo "$FIRST_BLOCK_DEVICE"
+	fi
 }
 
 get_main_disk_path() {
-    local DOM="$1"
-    debug_funct "get_main_disk_path $DOM"
+	local DOM="$1"
+	debug_funct "get_main_disk_path $DOM"
 
-    # todo: this only uses the first disk, change to iterate over all disks
-    local DISK_INFO
-    DISK_INFO=$(get_main_disk_info "$DOM") || exit 1
-    local DISK_MAIN
-    DISK_MAIN=$(echo "$DISK_INFO" | head -n1 | awk '{print $4}')
-    debug "DISK_MAIN $DISK_MAIN"
+	# todo: this only uses the first disk, change to iterate over all disks
+	local DISK_INFO
+	DISK_INFO=$(get_main_disk_info "$DOM") || exit 1
+	local DISK_MAIN
+	DISK_MAIN=$(echo "$DISK_INFO" | head -n1 | awk '{print $4}')
+	debug "DISK_MAIN $DISK_MAIN"
 
-    # verify variable
-    if [ -z "$DISK_MAIN" ]; then
-        error "Can't find main disk"
-    # verify path
-    elif [ ! -f "$DISK_MAIN" ]; then
-        error "Can't find main disk, target is not a file: $DISK_MAIN"
-    # verify disk file
-    else
-        if file -L "$DISK_MAIN" | grep -q "QEMU QCOW"; then
-            echo "$DISK_MAIN"
-        else
-            error "Disk must be in QEMU QCOW format '$DISK_MAIN'"
-        fi
-    fi
+	# verify variable
+	if [ -z "$DISK_MAIN" ]; then
+		error "Can't find main disk"
+	# verify path
+	elif [ ! -f "$DISK_MAIN" ]; then
+		error "Can't find main disk, target is not a file: $DISK_MAIN"
+	# verify disk file
+	else
+		if file -L "$DISK_MAIN" | grep -q "QEMU QCOW"; then
+			echo "$DISK_MAIN"
+		else
+			error "Disk must be in QEMU QCOW format '$DISK_MAIN'"
+		fi
+	fi
 }
 
 get_backing_disks() {
-    local DISK_MAIN="$1"
-    debug_funct "get_backing_disks $DISK_MAIN"
+	local DISK_MAIN="$1"
+	debug_funct "get_backing_disks $DISK_MAIN"
 
-    # verify
-    if [ -z "$DISK_MAIN" ]; then
-        error "get_backing_disks failed with an empty variable"
-    fi
+	# verify
+	if [ -z "$DISK_MAIN" ]; then
+		error "get_backing_disks failed with an empty variable"
+	fi
 
-    local DISK_DATA
-    DISK_DATA=$(qemu-img info --force-share --backing-chain "$DISK_MAIN" \
-        2>/dev/null)
+	local DISK_DATA
+	DISK_DATA=$(qemu-img info --force-share --backing-chain "$DISK_MAIN" \
+		2>/dev/null)
 
-    local DISK_CHAIN
-    DISK_CHAIN=$(echo "$DISK_DATA" | grep 'backing file:' |
-        sed 's/backing file: //g' | awk '{print $1}')
+	local DISK_CHAIN
+	DISK_CHAIN=$(echo "$DISK_DATA" | grep 'backing file:' |
+		sed 's/backing file: //g' | awk '{print $1}')
 
-    if [ -z "$DISK_CHAIN" ]; then
-        debug "$DISK_MAIN has no disk chain"
-    else
-        echo "$DISK_CHAIN"
-    fi
+	if [ -z "$DISK_CHAIN" ]; then
+		debug "$DISK_MAIN has no disk chain"
+	else
+		echo "$DISK_CHAIN"
+	fi
 }
 
 get_prevoius_baking_disk() {
-    local SOURCE_DISK="$1"
+	local SOURCE_DISK="$1"
 
-    if echo "$SOURCE_DISK" | grep -q "_"; then
-        : # all good
-    else
-        error "Disk '$SOURCE_DISK' is a base disk, not a chain"
-    fi
+	if echo "$SOURCE_DISK" | grep -q "_"; then
+		: # all good
+	else
+		error "Disk '$SOURCE_DISK' is a base disk, not a chain"
+	fi
 
-    local PREVIOUS_DISK
-    PREVIOUS_DISK=$(echo "$DISK" | sed 's![^_]*$!!' | sed 's/.$//')
-    debug "PREVIOUS_DISK $PREVIOUS_DISK"
+	local PREVIOUS_DISK
+	PREVIOUS_DISK=$(echo "$DISK" | sed 's![^_]*$!!' | sed 's/.$//')
+	debug "PREVIOUS_DISK $PREVIOUS_DISK"
 
-    # verify
-    if [ -z "$PREVIOUS_DISK" ]; then
-        error "vm_rebase_chain_disk PREVIOUS_DISK is empty"
-    else
-        echo "$SOURCE_DISK"
-    fi
+	# verify
+	if [ -z "$PREVIOUS_DISK" ]; then
+		error "vm_rebase_chain_disk PREVIOUS_DISK is empty"
+	else
+		echo "$SOURCE_DISK"
+	fi
 }
 
 xml_try_get() {
-    local XML_FILE="$1"
-    local XML_PATH="$2"
-    local XML_FILE_BASE
-    local XML_PATH_BASE
-    XML_FILE_BASE=$(basename "$XML_FILE")
-    XML_PATH_BASE=$(basename "$XML_PATH")
-    debug_funct "xml_try_get $XML_FILE_BASE $XML_PATH_BASE"
+	local XML_FILE="$1"
+	local XML_PATH="$2"
+	local XML_FILE_BASE
+	local XML_PATH_BASE
+	XML_FILE_BASE=$(basename "$XML_FILE")
+	XML_PATH_BASE=$(basename "$XML_PATH")
+	debug_funct "xml_try_get $XML_FILE_BASE $XML_PATH_BASE"
 
-    # verify file
-    if [ ! -f "$XML_FILE" ]; then
-        error "$XML_FILE does not exist"
-    fi
+	# verify file
+	if [ ! -f "$XML_FILE" ]; then
+		error "$XML_FILE does not exist"
+	fi
 
-    xmlstarlet sel -t -v "$XML_PATH" "$XML_FILE" ||
-        debug "xml_try_get file:$XML_FILE path:$XML_PATH"
+	xmlstarlet sel -t -v "$XML_PATH" "$XML_FILE" ||
+		debug "xml_try_get file:$XML_FILE path:$XML_PATH"
 }
 
 xml_get() {
-    local XML_FILE="$1"
-    local XML_PATH="$2"
-    local XML_FILE_BASE
-    local XML_PATH_BASE
-    XML_FILE_BASE=$(basename "$XML_FILE")
-    XML_PATH_BASE=$(basename "$XML_PATH")
-    debug_funct "xml_get $XML_FILE_BASE $XML_PATH_BASE"
+	local XML_FILE="$1"
+	local XML_PATH="$2"
+	local XML_FILE_BASE
+	local XML_PATH_BASE
+	XML_FILE_BASE=$(basename "$XML_FILE")
+	XML_PATH_BASE=$(basename "$XML_PATH")
+	debug_funct "xml_get $XML_FILE_BASE $XML_PATH_BASE"
 
-    # verify file
-    if [ ! -f "$XML_FILE" ]; then
-        error "$XML_FILE does not exist"
-    fi
+	# verify file
+	if [ ! -f "$XML_FILE" ]; then
+		error "$XML_FILE does not exist"
+	fi
 
-    xmlstarlet sel -t -v "$XML_PATH" "$XML_FILE" ||
-        error "xml_get file:$XML_FILE path:$XML_PATH"
+	xmlstarlet sel -t -v "$XML_PATH" "$XML_FILE" ||
+		error "xml_get file:$XML_FILE path:$XML_PATH"
 }
 
 xml_set() {
-    # this will replace all occurences
-    local XML_FILE="$1"
-    local XML_PATH="$2"
-    local XML_VAR="$3"
-    local XML_FILE_BASE
-    local XML_PATH_BASE
-    XML_FILE_BASE=$(basename "$XML_FILE")
-    XML_PATH_BASE=$(basename "$XML_PATH")
-    debug_funct "xml_set $XML_FILE_BASE $XML_PATH_BASE"
-    debug "XML_VAR $XML_VAR"
+	# this will replace all occurences
+	local XML_FILE="$1"
+	local XML_PATH="$2"
+	local XML_VAR="$3"
+	local XML_FILE_BASE
+	local XML_PATH_BASE
+	XML_FILE_BASE=$(basename "$XML_FILE")
+	XML_PATH_BASE=$(basename "$XML_PATH")
+	debug_funct "xml_set $XML_FILE_BASE $XML_PATH_BASE"
+	debug "XML_VAR $XML_VAR"
 
-    # verify file
-    if [ ! -f "$XML_FILE" ]; then
-        error "$XML_FILE does not exist"
-    fi
+	# verify file
+	if [ ! -f "$XML_FILE" ]; then
+		error "$XML_FILE does not exist"
+	fi
 
-    xmlstarlet ed --inplace -u "$XML_PATH" -v "$XML_VAR" "$XML_FILE" 1>&2 ||
-        error "xml_set file:$XML_FILE path:$XML_PATH var:$XML_VAR "
+	xmlstarlet ed --inplace -u "$XML_PATH" -v "$XML_VAR" "$XML_FILE" 1>&2 ||
+		error "xml_set file:$XML_FILE path:$XML_PATH var:$XML_VAR "
 }
 
 xml_replace() {
-    # this will replace a single string after a certain occurences
-    local XML_FILE="$1"
-    local PREFIX="$2"
-    local DATA="$3"
-    local SUFFIX="$4"
-    local NR="$5"
-    local XML_FILE_BASE
-    local TMP_XML
-    XML_FILE_BASE=$(basename "$XML_FILE")
-    debug_funct "xml_replace $XML_FILE_BASE nr:$NR data:$DATA"
+	# this will replace a single string after a certain occurences
+	local XML_FILE="$1"
+	local PREFIX="$2"
+	local DATA="$3"
+	local SUFFIX="$4"
+	local NR="$5"
+	local XML_FILE_BASE
+	local TMP_XML
+	XML_FILE_BASE=$(basename "$XML_FILE")
+	debug_funct "xml_replace $XML_FILE_BASE nr:$NR data:$DATA"
 
-    # verify file
-    if [ ! -f "$XML_FILE" ]; then
-        error "$XML_FILE does not exist"
-    fi
+	# verify file
+	if [ ! -f "$XML_FILE" ]; then
+		error "$XML_FILE does not exist"
+	fi
 
-    # read from temp copy
-    TMP_XML=$(mktemp) || error "xml_replace mktemp"
-    cp -f "$XML_FILE" "$TMP_XML"
+	# read from temp copy
+	TMP_XML=$(mktemp) || error "xml_replace mktemp"
+	cp -f "$XML_FILE" "$TMP_XML"
 
-    # shellcheck disable=SC1087
-    # replace the $NR occurance of $PREFIX...$SUFFIX with new string $DATA
-    tr '\n' '@' <"$TMP_XML" |
-        sed "s:$PREFIX[^<]*$SUFFIX:$PREFIX$DATA$SUFFIX:$NR" |
-        tr '@' '\n' >"$XML_FILE"
+	# shellcheck disable=SC1087
+	# replace the $NR occurance of $PREFIX...$SUFFIX with new string $DATA
+	tr '\n' '@' <"$TMP_XML" |
+		sed "s:$PREFIX[^<]*$SUFFIX:$PREFIX$DATA$SUFFIX:$NR" |
+		tr '@' '\n' >"$XML_FILE"
 
-    # cleanup
-    rm -f "$TMP_XML"
+	# cleanup
+	rm -f "$TMP_XML"
 }
 
 xml_del() {
-    local XML_FILE="$1"
-    local XML_PATH="$2"
-    local XML_FILE_BASE
-    local XML_PATH_BASE
-    XML_FILE_BASE=$(basename "$XML_FILE")
-    XML_PATH_BASE=$(basename "$XML_PATH")
-    debug_funct "xml_del $XML_FILE_BASE $XML_PATH_BASE"
+	local XML_FILE="$1"
+	local XML_PATH="$2"
+	local XML_FILE_BASE
+	local XML_PATH_BASE
+	XML_FILE_BASE=$(basename "$XML_FILE")
+	XML_PATH_BASE=$(basename "$XML_PATH")
+	debug_funct "xml_del $XML_FILE_BASE $XML_PATH_BASE"
 
-    # verify file
-    if [ ! -f "$XML_FILE" ]; then
-        error "$XML_FILE does not exist"
-    fi
+	# verify file
+	if [ ! -f "$XML_FILE" ]; then
+		error "$XML_FILE does not exist"
+	fi
 
-    xmlstarlet ed --inplace -d "$XML_PATH" "$XML_FILE" 1>&2 ||
-        error "xml_del file:$XML_FILE path:$XML_PATH"
+	xmlstarlet ed --inplace -d "$XML_PATH" "$XML_FILE" 1>&2 ||
+		error "xml_del file:$XML_FILE path:$XML_PATH"
 }
 
 xml_val() {
-    local XML_FILE="$1"
-    local XML_FILE_BASE
-    XML_FILE_BASE=$(basename "$XML_FILE")
-    debug_funct "xml_val $XML_FILE_BASE"
+	local XML_FILE="$1"
+	local XML_FILE_BASE
+	XML_FILE_BASE=$(basename "$XML_FILE")
+	debug_funct "xml_val $XML_FILE_BASE"
 
-    # verify file
-    if [ ! -f "$XML_FILE" ]; then
-        error "$XML_FILE does not exist"
-    fi
+	# verify file
+	if [ ! -f "$XML_FILE" ]; then
+		error "$XML_FILE does not exist"
+	fi
 
-    local VAL_DATA
-    VAL_DATA=$(virt-xml-validate "$XML_FILE" 2>&1)
-    local VAL_DATA_FIRST_LINE
-    VAL_DATA_FIRST_LINE=$(echo "$VAL_DATA" | head -n1)
+	local VAL_DATA
+	VAL_DATA=$(virt-xml-validate "$XML_FILE" 2>&1)
+	local VAL_DATA_FIRST_LINE
+	VAL_DATA_FIRST_LINE=$(echo "$VAL_DATA" | head -n1)
 
-    if echo "$VAL_DATA_FIRST_LINE" | grep -q " validates"; then
-        debug "VAL_DATA_FIRST_LINE $VAL_DATA_FIRST_LINE"
-    else
-        warn_cont "Failed to validate XML, error message is:"
-        echo "$VAL_DATA" 1>&2
-        error "Invalid libvirt XML format, please fix '$XML_FILE'"
-    fi
+	if echo "$VAL_DATA_FIRST_LINE" | grep -q " validates"; then
+		debug "VAL_DATA_FIRST_LINE $VAL_DATA_FIRST_LINE"
+	else
+		warn_cont "Failed to validate XML, error message is:"
+		echo "$VAL_DATA" 1>&2
+		error "Invalid libvirt XML format, please fix '$XML_FILE'"
+	fi
 }
 
 disk_copy() {
-    local DISK_SRC="$1"
-    local DISK_DES="$2"
+	local DISK_SRC="$1"
+	local DISK_DES="$2"
 
-    if [ -f "$DISK_DES" ]; then
-        warn_cont "Destination disk already exists, skipping"
-    else
-        info "Copy disk $DISK_SRC --> $DISK_DES"
-        rsync -a --progress "$DISK_SRC" "$DISK_DES" 1>&2 ||
-            error "disk_copy rsync"
-        # default permissions
-        chmod 644 "$DISK_DES"
-    fi
+	if [ -f "$DISK_DES" ]; then
+		warn_cont "Destination disk already exists, skipping"
+	else
+		info "Copy disk $DISK_SRC --> $DISK_DES"
+		rsync -a --progress "$DISK_SRC" "$DISK_DES" 1>&2 ||
+			error "disk_copy rsync"
+	fi
+}
+
+own_file() {
+	local TARGET_OWNER="$1"
+	local TARGET_FILE="$2"
+	debug_funct "own_file $TARGET_OWNER $TARGET_FILE"
+
+	# using default virtmanager permissions
+	chmod 600 "$TARGET_FILE"
+	chown "$TARGET_OWNER" "$TARGET_FILE"
+}
+
+own_link() {
+	local TARGET_OWNER="$1"
+	local TARGET_FILE="$2"
+	debug_funct "own_link $TARGET_OWNER $TARGET_FILE "
+
+	chown "$TARGET_OWNER" "$TARGET_FILE"
 }
 
 disk_link() {
-    local DISK_SRC="$1"
-    local DISK_DES="$2"
+	local DISK_SRC="$1"
+	local DISK_DES="$2"
 
-    # todo: remove broken symlinks before
-    if test -L "$DISK_DES"; then
-        info "Disk already linked $DISK_DES"
-    elif [ -f "$DISK_DES" ]; then
-        info "Already existing disk $DISK_DES"
-    else
-        info "Linking disk $DISK_SRC --> $DISK_DES"
-        ln -s "$DISK_SRC" "$DISK_DES"
-    fi
+	# todo: remove broken symlinks before
+	if test -L "$DISK_DES"; then
+		info "Disk already linked $DISK_DES"
+	elif [ -f "$DISK_DES" ]; then
+		info "Already existing disk $DISK_DES"
+	else
+		info "Linking disk $DISK_SRC --> $DISK_DES"
+		ln -s "$DISK_SRC" "$DISK_DES"
+	fi
 }
 
 vm_chain() {
-    local DOM_SRC="$1"
-    local DOM_DES="$2"
-    debug_funct "vm_chain $DOM_SRC $DOM_DES"
+	local DOM_SRC="$1"
+	local DOM_DES="$2"
+	debug_funct "vm_chain $DOM_SRC $DOM_DES"
 
-    # verify
-    if [ "$DOM_SRC" = "$DOM_DES" ]; then
-        error "Destination domain can not have the same name as source domain"
-    fi
-    #    DOM_NEW="$DOM_SRC""_""$DOM_DES"
-    #    debug "DOM_NEW $DOM_NEW"
+	# verify
+	if [ "$DOM_SRC" = "$DOM_DES" ]; then
+		error "Destination domain can not have the same name as source domain"
+	fi
+	#    DOM_NEW="$DOM_SRC""_""$DOM_DES"
+	#    debug "DOM_NEW $DOM_NEW"
 
-    # requirements
-    if ! is_imported "$DOM_SRC"; then
-        error "Source domain does not exist"
-    fi
-    if is_imported "$DOM_DES"; then
-        error "Destination domain already exist"
-    fi
+	# requirements
+	if ! is_imported "$DOM_SRC"; then
+		error "Source domain does not exist"
+	fi
+	if is_imported "$DOM_DES"; then
+		error "Destination domain already exist"
+	fi
 
-    info "Creating new chain"
-    # this only creates a new disk for the chain
-    local FIRST_BLOCK_DEVICE
-    FIRST_BLOCK_DEVICE=$(get_running_block_device "$DOM_SRC") || exit 1
-    local DISK_SRC="$PATH_POOL/$DOM_SRC"
-    debug "DISK_SRC $DISK_SRC"
-    local DISK_DES="$PATH_POOL/$DOM_DES"
-    debug "DISK_DES $DISK_DES"
-    virsh -q snapshot-create-as --domain "$DOM_SRC" "NA" \
-        --diskspec "$FIRST_BLOCK_DEVICE",file="$DISK_DES" --disk-only \
-        --no-metadata || error "vm_chain snapshot-create-as"
-    vm_rebase_chain_disk "$DOM_DES" "$PATH_POOL"
+	info "Creating new chain"
+	# this only creates a new disk for the chain
+	local FIRST_BLOCK_DEVICE
+	FIRST_BLOCK_DEVICE=$(get_running_block_device "$DOM_SRC") || exit 1
+	local DISK_SRC="$PATH_POOL/$DOM_SRC"
+	debug "DISK_SRC $DISK_SRC"
+	local DISK_DES="$PATH_POOL/$DOM_DES"
+	debug "DISK_DES $DISK_DES"
+	virsh -q snapshot-create-as --domain "$DOM_SRC" "NA" \
+		--diskspec "$FIRST_BLOCK_DEVICE",file="$DISK_DES" --disk-only \
+		--no-metadata || error "vm_chain snapshot-create-as"
+	own_file "$OWNER_POOL" "$DISK_DES"
+	vm_rebase_chain_disk "$DOM_DES" "$PATH_POOL"
 
-    # rename domain
-    info "Rename domain $DOM_SRC --> $DOM_DES"
-    virsh -q domrename "$DOM_SRC" "$DOM_DES" || error "vm_chain rename"
+	# rename domain
+	info "Rename domain $DOM_SRC --> $DOM_DES"
+	virsh -q domrename "$DOM_SRC" "$DOM_DES" || error "vm_chain rename"
 }
 
 vm_chain_info() {
-    local DOM="$1"
-    debug_funct "vm_chain_info $DOM"
+	local DOM="$1"
+	debug_funct "vm_chain_info $DOM"
 
-    # check current active domain
-    local DISKS
-    if is_imported "$DOM"; then
-        DISKS=$(get_backing_disks "$PATH_POOL/$DOM")
-        if [ -z "$DISKS" ]; then
-            warn_cont "No disk chain found"
-        fi
-    else
-        DISKS="Domain not found"
-    fi
-    info "(current ) $(pretty_print_chain "$DISKS")"
+	# check current active domain
+	local DISKS
+	if is_imported "$DOM"; then
+		DISKS=$(get_backing_disks "$PATH_POOL/$DOM")
+		if [ -z "$DISKS" ]; then
+			warn_cont "No disk chain found"
+		fi
+	else
+		DISKS="Domain not found"
+	fi
+	info "(current ) $(pretty_print_chain "$DISKS")"
 
-    # check disk in import folder
-    local DOM_IMM="$PATH_IMMUTABLE/$DOM"
-    debug "DOM_IMM $DOM_IMM"
-    local DISKS_IMM
-    if [ -f "$DOM_IMM" ]; then
-        local DISKS_IMM
-        DISKS_IMM=$(get_backing_disks "$DOM_IMM")
-    else
-        DISKS_IMM="File not found"
-    fi
-    info "(immutable) $(pretty_print_chain "$DISKS_IMM")"
+	# check disk in import folder
+	local DOM_IMM="$PATH_IMMUTABLE/$DOM"
+	debug "DOM_IMM $DOM_IMM"
+	local DISKS_IMM
+	if [ -f "$DOM_IMM" ]; then
+		local DISKS_IMM
+		DISKS_IMM=$(get_backing_disks "$DOM_IMM")
+	else
+		DISKS_IMM="File not found"
+	fi
+	info "(immutable) $(pretty_print_chain "$DISKS_IMM")"
 }
 
 vm_destroy() {
-    local DOM="$1"
-    debug_funct "vm_destroy $DOM"
+	local DOM="$1"
+	debug_funct "vm_destroy $DOM"
 
-    require_is_imported "$DOM"
+	require_is_imported "$DOM"
 
-    if ! is_shutdown "$DOM"; then
-        info "Stop (hard shutdown)"
-        virsh -q destroy "$DOM" 1>&2 || error vm_destroy
-        # wait for shutdown to finish
-        local COUNTER=0
-        while true; do
-            if [ "$COUNTER" = "5" ]; then
-                error "Can not force shutdown"
-            fi
-            if ! is_shutdown "$DOM"; then
-                sleep 1
-            else
-                break
-            fi
-            COUNTER=$((COUNTER + 1))
-        done
-    fi
+	if ! is_shutdown "$DOM"; then
+		info "Stop (hard shutdown)"
+		virsh -q destroy "$DOM" 1>&2 || error vm_destroy
+		# wait for shutdown to finish
+		local COUNTER=0
+		while true; do
+			if [ "$COUNTER" = "5" ]; then
+				error "Can not force shutdown"
+			fi
+			if ! is_shutdown "$DOM"; then
+				sleep 1
+			else
+				break
+			fi
+			COUNTER=$((COUNTER + 1))
+		done
+	fi
 }
 
 vm_erase() {
-    local DOM="$1"
-    debug_funct "vm_erase $DOM"
+	local DOM="$1"
+	debug_funct "vm_erase $DOM"
 
-    #todo: also kill runnig background processes that are looking for this domain
-    info "Erasing"
+	#todo: also kill runnig background processes that are looking for this domain
+	info "Erasing"
 
-    # remove from /etc/hosts
-    info "Removing host from /etc/hosts"
-    add-to-hosts "$DOM" --rm 1>/dev/null || error add-to-hosts
+	# remove from /etc/hosts
+	info "Removing host from /etc/hosts"
+	add-to-hosts "$DOM" --rm 1>/dev/null || error add-to-hosts
 
-    # erase disk chain
-    local BACKING_DISKS
-    BACKING_DISKS=$(get_backing_disks "$PATH_POOL/$DOM")
-    if [ -z "$BACKING_DISKS" ]; then
-        warn_cont "No disk chain found, skipping deletion"
-    else
-        for CURRENT_DISK in $BACKING_DISKS; do
-            local DISK_TO_DEL="$PATH_POOL/$CURRENT_DISK"
-            if [ ! -f "$DISK_TO_DEL" ]; then
-                warn_cont "Disk not found: $DISK_TO_DEL"
-            else
-                if test -L "$DISK_TO_DEL"; then
-                    info "Skipping chain disk symlink deletion $DISK_TO_DEL"
-                else
-                    info "Deleting chain disk $DISK_TO_DEL"
-                    rm -f "$DISK_TO_DEL"
-                fi
-            fi
-        done
-    fi
+	# erase disk chain
+	local BACKING_DISKS
+	BACKING_DISKS=$(get_backing_disks "$PATH_POOL/$DOM")
+	if [ -z "$BACKING_DISKS" ]; then
+		warn_cont "No disk chain found, skipping deletion"
+	else
+		for CURRENT_DISK in $BACKING_DISKS; do
+			local DISK_TO_DEL="$PATH_POOL/$CURRENT_DISK"
+			if [ ! -f "$DISK_TO_DEL" ]; then
+				warn_cont "Disk not found: $DISK_TO_DEL"
+			else
+				if test -L "$DISK_TO_DEL"; then
+					info "Skipping chain disk symlink deletion $DISK_TO_DEL"
+				else
+					info "Deleting chain disk $DISK_TO_DEL"
+					rm -f "$DISK_TO_DEL"
+				fi
+			fi
+		done
+	fi
 
-    # find main disk
-    local PATH_MAIN_DISK
-    PATH_MAIN_DISK=$(get_main_disk_path "$DOM")
-    if [ -z "$PATH_MAIN_DISK" ]; then
-        warn_cont "No main disk found, erasig disk based on domain name"
-        PATH_MAIN_DISK="$PATH_POOL/$DOM"
-    fi
-    # erase main disk
-    if [ ! -f "$PATH_MAIN_DISK" ]; then
-        warn_cont "Disk not found: $PATH_MAIN_DISK"
-    else
-        info "Deleting main disk $PATH_MAIN_DISK"
-        rm -f "$PATH_MAIN_DISK"
-    fi
+	# find main disk
+	local PATH_MAIN_DISK
+	PATH_MAIN_DISK=$(get_main_disk_path "$DOM")
+	if [ -z "$PATH_MAIN_DISK" ]; then
+		warn_cont "No main disk found, erasig disk based on domain name"
+		PATH_MAIN_DISK="$PATH_POOL/$DOM"
+	fi
+	# erase main disk
+	if [ ! -f "$PATH_MAIN_DISK" ]; then
+		warn_cont "Disk not found: $PATH_MAIN_DISK"
+	else
+		info "Deleting main disk $PATH_MAIN_DISK"
+		rm -f "$PATH_MAIN_DISK"
+	fi
 
-    # undefine VM
-    virsh -q undefine "$DOM" 1>&2 || error vm_erase
+	# undefine VM
+	virsh -q undefine "$DOM" 1>&2 || error vm_erase
 
-    # delete all external snapshots
-    #    EXT_SNAPSHOTS=$(virsh -q snapshot-list --external "$DOMAIN_SRC")
-    #    for i in $EXT_SNAPSHOTS; do
-    #        EXT_SNAPSHOT_DISK="$PATH_POOL/$DOMAIN_SRC.$i"
-    #        virsh snapshot-delete --metadata "$DOMAIN_SRC" "$i" 1>&2 ||
-    #            error vm_erase_snapshot
-    #        # delete snapshot file
-    #        if [ -f "$EXT_SNAPSHOT_DISK" ]; then
-    #            info "Delete snapshot disk"
-    #            rm -f "$EXT_SNAPSHOT_DISK" 1>&2 ||
-    #                error "vm_erase_snapshot rm $EXT_SNAPSHOT_DISK"
-    #        else
-    #            info "Snapshot disk already deleted"
-    #        fi
-    #    done
+	# delete all external snapshots
+	#    EXT_SNAPSHOTS=$(virsh -q snapshot-list --external "$DOMAIN_SRC")
+	#    for i in $EXT_SNAPSHOTS; do
+	#        EXT_SNAPSHOT_DISK="$PATH_POOL/$DOMAIN_SRC.$i"
+	#        virsh snapshot-delete --metadata "$DOMAIN_SRC" "$i" 1>&2 ||
+	#            error vm_erase_snapshot
+	#        # delete snapshot file
+	#        if [ -f "$EXT_SNAPSHOT_DISK" ]; then
+	#            info "Delete snapshot disk"
+	#            rm -f "$EXT_SNAPSHOT_DISK" 1>&2 ||
+	#                error "vm_erase_snapshot rm $EXT_SNAPSHOT_DISK"
+	#        else
+	#            info "Snapshot disk already deleted"
+	#        fi
+	#    done
 }
 
 #vm_erase_snapshot() {
@@ -704,411 +725,433 @@ vm_erase() {
 #}
 
 vm_erase_net() {
-    # parse args
-    local DOM="$1"
-    debug_funct "vm_erase_net $DOM"
+	# parse args
+	local DOM="$1"
+	debug_funct "vm_erase_net $DOM"
 
-    local XML_CFG="$PATH_IMMUTABLE/$DOM.xml"
+	local XML_CFG="$PATH_IMMUTABLE/$DOM.xml"
 
-    # verify initial XML
-    xml_val "$XML_CFG"
+	# verify initial XML
+	xml_val "$XML_CFG"
 
-    net_action "$XML_CFG" --net_erase
+	net_action "$XML_CFG" --net_erase
 }
 
 vm_export() {
-    # parse args
-    local PROGRAM="$1"
-    local DOM="$2"
-    local DOM_DES="$3"
-    debug_funct "vm_export $PROGRAM $DOM $DOM_DES"
+	# parse args
+	local PROGRAM="$1"
+	local DOM="$2"
+	local DOM_DES="$3"
+	debug_funct "vm_export $PROGRAM $DOM $DOM_DES"
 
-    info "Exporting VM $DOM --> $DOM_DES"
+	info "Exporting VM $DOM --> $DOM_DES"
 
-    local XML_CFG_DES="$PATH_IMMUTABLE/$DOM_DES.xml"
-    debug "XML_CFG_DES $XML_CFG_DES"
-    local PATH_DISK_SRC
-    PATH_DISK_SRC=$(get_main_disk_path "$DOM") || exit 1
-    debug "PATH_DISK_SRC $PATH_DISK_SRC"
-    local PATH_DISK_DES="$PATH_IMMUTABLE/$DOM_DES"
-    debug "PATH_DISK_DES $PATH_DISK_DES"
+	local XML_CFG_DES="$PATH_IMMUTABLE/$DOM_DES.xml"
+	debug "XML_CFG_DES $XML_CFG_DES"
+	local PATH_DISK_SRC
+	PATH_DISK_SRC=$(get_main_disk_path "$DOM") || exit 1
+	debug "PATH_DISK_SRC $PATH_DISK_SRC"
+	local PATH_DISK_DES="$PATH_IMMUTABLE/$DOM_DES"
+	debug "PATH_DISK_DES $PATH_DISK_DES"
 
-    is_not_exported "$DOM_DES"
+	is_not_exported "$DOM_DES"
 
-    # export XML
-    debug "COMMAND: virsh dumpxml $DOM >$XML_CFG_DES"
-    virsh dumpxml "$DOM" >"$XML_CFG_DES" || error "vm_export dumpxml"
-    # rename
-    xml_set "$XML_CFG_DES" "domain/name" "$DOM_DES"
-    # set disk to output filename
-    xml_set "$XML_CFG_DES" "$XML_TAG_DISK" "$POOL_PH$DOM_DES"
-    # remove uuid
-    xml_del "$XML_CFG_DES" "domain/uuid"
-    # remove mac adresses
-    xml_del "$XML_CFG_DES" "domain/devices/interface/mac"
-    # verify XML
-    xml_val "$XML_CFG_DES"
-    # set proper owner
-    OWNER=$(stat -c "%U:%G" "$PATH_IMMUTABLE") || error "vm_export stat"
-    chown "$OWNER" "$XML_CFG_DES" || error "vm_export chown"
+	# export XML
+	debug "COMMAND: virsh dumpxml $DOM >$XML_CFG_DES"
+	virsh dumpxml "$DOM" >"$XML_CFG_DES" || error "vm_export dumpxml"
+	# replace the first disk with the same name as the domain
+	# also add a template path
+	sed -i "s;$PATH_DISK_SRC;$POOL_PLHO$DOM_DES;g" "$XML_CFG_DES"
+	# replace additional libvirt POOL paths with template path
+	sed -i "s;$PATH_POOL/;$POOL_PLHO;g" "$XML_CFG_DES"
+	# rename
+	xml_set "$XML_CFG_DES" "domain/name" "$DOM_DES"
+	# remove title
+	xml_del "$XML_CFG_DES" "domain/title"
+	# remove uuid
+	xml_del "$XML_CFG_DES" "domain/uuid"
+	# remove mac adresses
+	xml_del "$XML_CFG_DES" "domain/devices/interface/mac"
+	# verify XML
+	xml_val "$XML_CFG_DES"
+	# set proper owner
+	own_file "$OWNER_IMMUTABLE" "$XML_CFG_DES"
 
-    # export disk, exact copy
-    if [ "$PROGRAM" = "--copy" ]; then
-        disk_copy "$PATH_DISK_SRC" "$PATH_DISK_DES"
-        # todo: vm_rebase_chain_disk "$DOM" "$PATH_IMMUTABLE"
-    # export disk, merges chains and snapshots
-    elif [ "$PROGRAM" = "--merge-fast" ]; then
-        qemu-img convert -c -O qcow2 "$PATH_DISK_SRC" "$PATH_DISK_DES" 1>&2 ||
-            error "vm_export qemu-img convert"
-        # todo: vm_rebase_chain_disk "$DOM_DES" "$PATH_IMMUTABLE"
-    # export disk, merges chains and snapshots, erase disk with zeros
-    elif [ "$PROGRAM" = "--merge" ]; then
-        require_app virt-sparsify
-        virt-sparsify --compress "$PATH_DISK_SRC" "$PATH_DISK_DES" 1>&2 ||
-            error "vm_export virt-sparsify"
-    else
-        error "vm_export unknown export function"
-    fi
+	# notify if there is more than one disk
+	local DISKS_TOTAL
+	DISKS_TOTAL=$(grep -c "$POOL_PLHO" <"$XML_CFG_DES")
+	if [ "$DISKS_TOTAL" -gt 1 ]; then
+		info "More than one disk present in export, adapt XML manually"
+	fi
 
-    # set proper owner
-    chown "$OWNER" "$PATH_DISK_DES" || error "vm_export chown"
+	# export disk, exact copy
+	if [ "$PROGRAM" = "--copy" ]; then
+		disk_copy "$PATH_DISK_SRC" "$PATH_DISK_DES"
+		# todo: vm_rebase_chain_disk "$DOM" "$PATH_IMMUTABLE"
+	# export disk, merges chains and snapshots
+	elif [ "$PROGRAM" = "--merge-fast" ]; then
+		qemu-img convert -c -O qcow2 "$PATH_DISK_SRC" "$PATH_DISK_DES" 1>&2 ||
+			error "vm_export qemu-img convert"
+		# todo: vm_rebase_chain_disk "$DOM_DES" "$PATH_IMMUTABLE"
+	# export disk, merges chains and snapshots, erase disk with zeros
+	elif [ "$PROGRAM" = "--merge" ]; then
+		require_app virt-sparsify
+		virt-sparsify --compress "$PATH_DISK_SRC" "$PATH_DISK_DES" 1>&2 ||
+			error "vm_export virt-sparsify"
+	else
+		error "vm_export unknown export function"
+	fi
+
+	# set proper owner
+	own_file "$OWNER_IMMUTABLE" "$PATH_DISK_DES"
 }
 
 vm_import() {
-    # parse args
-    local TASK="$1"
-    local DOM="$2"
-    local DOM_IMP="$3"
-    debug_funct "vm_import $TASK $DOM $DOM_IMP"
+	# parse args
+	local TASK="$1"
+	local DOM="$2"
+	local DOM_IMP="$3"
+	debug_funct "vm_import $TASK $DOM $DOM_IMP"
 
-    if [ "$DOM" = "$DOM_IMP" ]; then
-        error "The source and target can not have the same name"
-    fi
+	if [ "$DOM" = "$DOM_IMP" ]; then
+		error "The source and target can not have the same name"
+	fi
 
-    require_is_not_imported "$DOM_IMP"
+	require_is_not_imported "$DOM_IMP"
 
-    info "Importing $DOM --> $DOM_IMP"
-    local XML_CFG="$PATH_IMMUTABLE/$DOM.xml"
-    debug "XML_CFG $XML_CFG"
+	info "Importing $DOM --> $DOM_IMP"
+	local XML_CFG="$PATH_IMMUTABLE/$DOM.xml"
+	debug "XML_CFG $XML_CFG"
 
-    # verify initial XML
-    xml_val "$XML_CFG"
+	# verify initial XML
+	xml_val "$XML_CFG"
 
-    # set main source disk
-    local DISK_DES
-    if [ "$TASK" = "--chain" ]; then
-        # needs to be the same, will be changed further down instead
-        DISK_DES="$PATH_POOL/$DOM"
-    else
-        DISK_DES="$PATH_POOL/$DOM_IMP"
-    fi
-    debug "DISK_DES $DISK_DES"
+	# set main source disk
+	local DISK_DES
+	if [ "$TASK" = "--chain" ]; then
+		# needs to be the same, will be changed further down instead
+		DISK_DES="$PATH_POOL/$DOM"
+	else
+		DISK_DES="$PATH_POOL/$DOM_IMP"
+	fi
+	debug "DISK_DES $DISK_DES"
 
-    # create a temporary XML definition file
-    local TMP_XML
-    TMP_XML=$(mktemp) || error "vm_import mktemp"
-    cp -f "$XML_CFG" "$TMP_XML" || error "vm_import copy XML"
-    # raplace disk
-    xml_set "$TMP_XML" "$XML_TAG_DISK" "$DISK_DES"
-    # rename domain
-    xml_set "$TMP_XML" "domain/name" "$DOM_IMP"
-    # remove uuid
-    xml_del "$TMP_XML" "domain/uuid"
+	# create a temporary XML definition file
+	local TMP_XML
+	TMP_XML=$(mktemp) || error "vm_import mktemp"
+	cp -f "$XML_CFG" "$TMP_XML" || error "vm_import copy XML"
+	# replace first disk with new name
+	xml_replace "$TMP_XML" "<source file=" \"$DISK_DES\" "/>" 1
+	# replace additional libvirt POOL paths with template path
+	sed -i "s;$POOL_PLHO;$PATH_POOL/;g" "$TMP_XML"
+	#xml_set "$TMP_XML" "$XML_TAG_DISK" "$DISK_DES"
+	# rename domain
+	xml_set "$TMP_XML" "domain/name" "$DOM_IMP"
+	# remove uuid
+	xml_del "$TMP_XML" "domain/uuid"
 
-    #todo: this might be a bad idea?
-    #	# replace networks
-    #	xml_replace "$TMP_XML" "<source network=" \"donkey\" "/>" 2
-    #
-    #	# replace CPU cores
-    #	xml_replace "$TMP_XML" ">" 4 "</vcpu>" 1
-    #
-    #	# replace memory
-    #	local NEW_RAM_KIB
-    #	local NEW_RAM_GIB=0.5
-    #	NEW_RAM_KIB=$(echo "$NEW_RAM_GIB * 1048576" | bc | cut -f1 -d".")
-    #	xml_replace "$TMP_XML" ">" "$NEW_RAM_KIB" "</memory>" 1
-    #	xml_replace "$TMP_XML" ">" "$NEW_RAM_KIB" "</currentMemory>" 1
+	#todo: this might be a bad idea?
+	#	# replace networks
+	#	xml_replace "$TMP_XML" "<source network=" \"donkey\" "/>" 2
+	#
+	#	# replace CPU cores
+	#	xml_replace "$TMP_XML" ">" 4 "</vcpu>" 1
+	#
+	#	# replace memory
+	#	local NEW_RAM_KIB
+	#	local NEW_RAM_GIB=0.5
+	#	NEW_RAM_KIB=$(echo "$NEW_RAM_GIB * 1048576" | bc | cut -f1 -d".")
+	#	xml_replace "$TMP_XML" ">" "$NEW_RAM_KIB" "</memory>" 1
+	#	xml_replace "$TMP_XML" ">" "$NEW_RAM_KIB" "</currentMemory>" 1
 
-    # verify XML again
-    xml_val "$TMP_XML"
+	# verify XML again
+	xml_val "$TMP_XML"
 
-    # make sure that all networks exist
-    net_action "$TMP_XML" --net_start
+	# make sure that all networks exist
+	net_action "$TMP_XML" --net_start
 
-    # define VM
-    info "Defining"
-    virsh -q define "$TMP_XML" 1>&2 || error "vm_import define"
+	# define VM
+	info "Defining"
+	virsh -q define "$TMP_XML" 1>&2 || error "vm_import define"
 
-    # cleanup temp XML
-    rm -f "$TMP_XML"
+	# cleanup temp XML
+	rm -f "$TMP_XML"
 
-    # only define
-    if [ "$TASK" = "--define" ]; then
-        :
-    #
-    # import entire chain
-    elif [ "$TASK" = "--clone" ] ||
-        [ "$TASK" = "--link" ] ||
-        [ "$TASK" = "--chain" ]; then
-        # find source disk
-        local DISK_ORIG
-        DISK_ORIG=$(xml_get "$XML_CFG" "$XML_TAG_DISK") || exit 1
-        local DISK_ORIG_BASE
-        DISK_ORIG_BASE=$(basename "$DISK_ORIG")
-        local M_DISK_SRC="$PATH_IMMUTABLE/$DISK_ORIG_BASE"
-        debug "M_DISK_SRC $M_DISK_SRC"
-        local M_DISK_DES="$PATH_POOL/$DOM_IMP"
-        debug "M_DISK_DES $M_DISK_DES"
-        #
-        # copy all chain disks (if there are any)
-        local BACKING_DISKS
-        BACKING_DISKS=$(get_backing_disks "$M_DISK_SRC")
-        if [ -n "$BACKING_DISKS" ]; then
-            local CURRENT_DISK_SRC
-            for CURRENT_DISK_SRC in $BACKING_DISKS; do
-                debug "CURRENT_DISK_SRC $CURRENT_DISK_SRC"
-                local CURRENT_DISK_BASE
-                CURRENT_DISK_BASE=$(basename "$CURRENT_DISK_SRC")
-                local C_DISK_SRC="$PATH_IMMUTABLE/$CURRENT_DISK_SRC"
-                local C_DISK_DES="$PATH_POOL/$CURRENT_DISK_BASE"
-                if [ "$TASK" = "--clone" ]; then
-                    disk_copy "$C_DISK_SRC" "$C_DISK_DES"
-                elif [ "$TASK" = "--link" ] || [ "$TASK" = "--chain" ]; then
-                    disk_link "$C_DISK_SRC" "$C_DISK_DES"
-                fi
-            done
-        fi
-        #
-        # copy main disk
-        if [ "$TASK" = "--clone" ]; then
-            disk_copy "$M_DISK_SRC" "$M_DISK_DES"
-        # full link
-        elif [ "$TASK" = "--link" ]; then
-            disk_link "$M_DISK_SRC" "$M_DISK_DES"
-        # create new main disk
-        elif [ "$TASK" = "--chain" ]; then
-            # link the main disk as well
-            disk_link "$M_DISK_SRC" "$PATH_POOL/$DOM"
-            info "Creating new chain"
-            # this only creates a new disk for the chain
-            local FIRST_BLOCK_DEVICE
-            FIRST_BLOCK_DEVICE=$(get_running_block_device "$DOM_IMP") || exit 1
-            local DISK_DES_NEW="$PATH_POOL/$DOM_IMP"
-            debug "DISK_DES_NEW $DISK_DES_NEW"
-            # check files
-            if [ -f "$DISK_DES_NEW" ]; then
-                error "Destination disk already exists $DISK_DES_NEW"
-            fi
-            # add new disk chain
-            virsh -q snapshot-create-as --domain "$DOM_IMP" "NA" \
-                --diskspec "$FIRST_BLOCK_DEVICE",file="$DISK_DES_NEW" \
-                --disk-only \
-                --no-metadata || error "vm_import snapshot-create-as"
-            # change disk path in XML
-            info "Redefining"
-            local XML_CURRENT="/etc/libvirt/qemu/$DOM_IMP.xml"
-            xml_set "$XML_CURRENT" "$XML_TAG_DISK" "$DISK_DES_NEW"
-            # reload domain config
-            virsh -q define "$XML_CURRENT" 1>&2 || error "vm_import define"
-            vm_rebase_disk "$DOM_IMP" "$DOM" "$PATH_POOL" || exit 1
-        fi
-        #
-    #
-    # abort
-    else
-        error "Unknown task parameter '$TASK'"
-    fi
+	# only define
+	if [ "$TASK" = "--define" ]; then
+		:
+	#
+	# import entire chain
+	elif [ "$TASK" = "--clone" ] ||
+		[ "$TASK" = "--link" ] ||
+		[ "$TASK" = "--chain" ]; then
+		# find source disk
+		local DISK_ORIG
+		# todo:, iterate trough all disks
+		DISK_ORIG=$(xml_get "$XML_CFG" "$XML_TAG_DISK" | head -n1) || exit 1
+		local DISK_ORIG_BASE
+		DISK_ORIG_BASE=$(basename "$DISK_ORIG")
+		local M_DISK_SRC="$PATH_IMMUTABLE/$DISK_ORIG_BASE"
+		debug "M_DISK_SRC $M_DISK_SRC"
+		local M_DISK_DES="$PATH_POOL/$DOM_IMP"
+		debug "M_DISK_DES $M_DISK_DES"
+		#
+		# copy all chain disks (if there are any)
+		local BACKING_DISKS
+		BACKING_DISKS=$(get_backing_disks "$M_DISK_SRC")
+		if [ -n "$BACKING_DISKS" ]; then
+			local CURRENT_DISK_SRC
+			for CURRENT_DISK_SRC in $BACKING_DISKS; do
+				debug "CURRENT_DISK_SRC $CURRENT_DISK_SRC"
+				local CURRENT_DISK_BASE
+				CURRENT_DISK_BASE=$(basename "$CURRENT_DISK_SRC")
+				local C_DISK_SRC="$PATH_IMMUTABLE/$CURRENT_DISK_SRC"
+				local C_DISK_DES="$PATH_POOL/$CURRENT_DISK_BASE"
+				if [ "$TASK" = "--clone" ]; then
+					disk_copy "$C_DISK_SRC" "$C_DISK_DES"
+					own_file "$OWNER_POOL" "$C_DISK_DES"
+				elif [ "$TASK" = "--link" ] || [ "$TASK" = "--chain" ]; then
+					disk_link "$C_DISK_SRC" "$C_DISK_DES"
+					own_link "$OWNER_POOL" "$C_DISK_DES"
+				fi
+			done
+		fi
+		#
+		# copy main disk
+		if [ "$TASK" = "--clone" ]; then
+			disk_copy "$M_DISK_SRC" "$M_DISK_DES"
+			own_file "$OWNER_POOL" "$M_DISK_DES"
+		# full link
+		elif [ "$TASK" = "--link" ]; then
+			disk_link "$M_DISK_SRC" "$M_DISK_DES"
+			own_link "$OWNER_POOL" "$M_DISK_DES"
+		# create new main disk
+		elif [ "$TASK" = "--chain" ]; then
+			# link the main disk as well
+			disk_link "$M_DISK_SRC" "$PATH_POOL/$DOM"
+			own_link "$OWNER_POOL" "$PATH_POOL/$DOM"
+			info "Creating new chain"
+			# this only creates a new disk for the chain
+			local FIRST_BLOCK_DEVICE
+			FIRST_BLOCK_DEVICE=$(get_running_block_device "$DOM_IMP") || exit 1
+			local DISK_DES_NEW="$PATH_POOL/$DOM_IMP"
+			debug "DISK_DES_NEW $DISK_DES_NEW"
+			# check files
+			if [ -f "$DISK_DES_NEW" ]; then
+				error "Destination disk already exists $DISK_DES_NEW"
+			fi
+			# add new disk chain
+			virsh -q snapshot-create-as --domain "$DOM_IMP" "NA" \
+				--diskspec "$FIRST_BLOCK_DEVICE",file="$DISK_DES_NEW" \
+				--disk-only \
+				--no-metadata || error "vm_import snapshot-create-as"
+			# change disk path in XML
+			info "Redefining"
+			local XML_CURRENT="/etc/libvirt/qemu/$DOM_IMP.xml"
+			xml_set "$XML_CURRENT" "$XML_TAG_DISK" "$DISK_DES_NEW"
+			# reload domain config
+			virsh -q define "$XML_CURRENT" 1>&2 || error "vm_import define"
+			vm_rebase_disk "$DOM_IMP" "$DOM" "$PATH_POOL" || exit 1
+			# set permissions
+			own_file "$OWNER_POOL" "$DISK_DES_NEW"
+		fi
+		#
+	#
+	# abort
+	else
+		error "Unknown task parameter '$TASK'"
+	fi
 }
 
 vm_purge_immutable() {
-    local DOM="$1"
-    if [ -z "$DOM" ]; then
-        error "vm_purge_immutable DOM can not be empty"
-    fi
+	local DOM="$1"
+	if [ -z "$DOM" ]; then
+		error "vm_purge_immutable DOM can not be empty"
+	fi
 
-    local DISK_SRC="$PATH_IMMUTABLE/$DOM"
-    local XML_SRC="$DISK_SRC.xml"
-    if [ -f "$DISK_SRC" ]; then
-        info "Deleting disk $DISK_SRC"
-        rm -f "$DISK_SRC" 1>&2 || error "vm_purge_immutable"
-    fi
-    if [ -f "$XML_SRC" ]; then
-        info "Deleting XML $XML_SRC"
-        rm -f "$XML_SRC" 1>&2 || error "vm_purge_immutable"
-    fi
+	local DISK_SRC="$PATH_IMMUTABLE/$DOM"
+	local XML_SRC="$DISK_SRC.xml"
+	if [ -f "$DISK_SRC" ]; then
+		info "Deleting disk $DISK_SRC"
+		rm -f "$DISK_SRC" 1>&2 || error "vm_purge_immutable"
+	fi
+	if [ -f "$XML_SRC" ]; then
+		info "Deleting XML $XML_SRC"
+		rm -f "$XML_SRC" 1>&2 || error "vm_purge_immutable"
+	fi
 }
 
 vm_purge_pool() {
-    local DOM="$1"
-    if [ -z "$DOM" ]; then
-        error "vm_purge_pool DOM can not be empty"
-    fi
+	local DOM="$1"
+	if [ -z "$DOM" ]; then
+		error "vm_purge_pool DOM can not be empty"
+	fi
 
-    local DISK_SRC="$PATH_POOL/$DOM"
-    if [ -f "$DISK_SRC" ]; then
-        info "Deleting disk $DISK_SRC"
-        rm -f "$DISK_SRC" "$DISK_DES" 1>&2 || error "vm_purge_pool"
-    fi
+	local DISK_SRC="$PATH_POOL/$DOM"
+	if [ -f "$DISK_SRC" ]; then
+		info "Deleting disk $DISK_SRC"
+		rm -f "$DISK_SRC" "$DISK_DES" 1>&2 || error "vm_purge_pool"
+	fi
 }
 
 vm_rebase_chain_disk() {
-    local DISK="$1"
-    local PATH_TARGET="$2"
-    debug_funct "vm_rebase_chain_disk $DISK $PATH_TARGET"
+	local DISK="$1"
+	local PATH_TARGET="$2"
+	debug_funct "vm_rebase_chain_disk $DISK $PATH_TARGET"
 
-    local PREVIOUS_DISK
-    PREVIOUS_DISK=$(get_prevoius_baking_disk "$DISK") || exit 1
-    vm_rebase_disk "$DISK" "$PREVIOUS_DISK" "$PATH_TARGET" || exit 1
+	local PREVIOUS_DISK
+	PREVIOUS_DISK=$(get_prevoius_baking_disk "$DISK") || exit 1
+	vm_rebase_disk "$DISK" "$PREVIOUS_DISK" "$PATH_TARGET" || exit 1
 }
 
 vm_rebase_disk() {
-    local DISK="$1"
-    local PREVIOUS_DISK="$2"
-    local PATH_TARGET="$3"
-    debug_funct "vm_rebase_disk $DISK $PATH_TARGET"
+	local DISK="$1"
+	local PREVIOUS_DISK="$2"
+	local PATH_TARGET="$3"
+	debug_funct "vm_rebase_disk $DISK $PATH_TARGET"
 
-    local DISK_MAIN="$PATH_TARGET/$DISK"
-    debug "DISK_MAIN $DISK_MAIN"
-    if [ -z "$DISK_MAIN" ]; then
-        error "vm_rebase_disk DISK_MAIN is empty"
-    fi
+	local DISK_MAIN="$PATH_TARGET/$DISK"
+	debug "DISK_MAIN $DISK_MAIN"
+	if [ -z "$DISK_MAIN" ]; then
+		error "vm_rebase_disk DISK_MAIN is empty"
+	fi
 
-    # uses relative disk paths
-    debug "Rebase disk chain file '$DISK_MAIN' to path '$PREVIOUS_DISK'"
-    qemu-img rebase -u -f qcow2 -F qcow2 -b "$PREVIOUS_DISK" "$DISK_MAIN" ||
-        error vm_rebase_disk
+	# uses relative disk paths
+	debug "Rebase disk chain file '$DISK_MAIN' to path '$PREVIOUS_DISK'"
+	qemu-img rebase -u -f qcow2 -F qcow2 -b "$PREVIOUS_DISK" "$DISK_MAIN" ||
+		error vm_rebase_disk
 }
 
 vm_shutdown() {
-    local DOM="$1"
-    debug_funct "vm_shutdown $DOM"
+	local DOM="$1"
+	debug_funct "vm_shutdown $DOM"
 
-    require_is_imported "$DOM"
+	require_is_imported "$DOM"
 
-    if ! is_shutdown "$DOM"; then
-        info "Stop (OS shutdown)"
-        virsh -q shutdown "$DOM" 1>&2 || error vm_shutdown
-        # wait for shutdown to finish
-        local COUNTER=0
-        local COUNTER_MAX=180
-        local NOTIFY_COUNTER=0
-        while true; do
-            # 3 minutes maximum shutdown timeout
-            # Otherwise consider VM is broken
-            # No reasonable OS should take longer
-            if [ "$COUNTER" = "$COUNTER_MAX" ]; then
-                info "Can not shutdown, forcing shutdown"
-                vm_destroy
-                break
-            fi
-            if ! is_shutdown "$DOM"; then
-                virsh -q shutdown "$DOM" 1>/dev/null 2>&1
-                if [ $NOTIFY_COUNTER = 10 ]; then
-                    NOTIFY_COUNTER=0
-                    info "Waiting for shutdown... $COUNTER/$COUNTER_MAX sec."
-                fi
-                sleep 1
-                NOTIFY_COUNTER=$((NOTIFY_COUNTER + 1))
-            else
-                break
-            fi
-            COUNTER=$((COUNTER + 1))
-        done
-    fi
+	if ! is_shutdown "$DOM"; then
+		info "Stop (OS shutdown)"
+		virsh -q shutdown "$DOM" 1>&2 || error vm_shutdown
+		# wait for shutdown to finish
+		local COUNTER=0
+		local COUNTER_MAX=180
+		local NOTIFY_COUNTER=0
+		while true; do
+			# 3 minutes maximum shutdown timeout
+			# Otherwise consider VM is broken
+			# No reasonable OS should take longer
+			if [ "$COUNTER" = "$COUNTER_MAX" ]; then
+				info "Can not shutdown, forcing shutdown"
+				vm_destroy
+				break
+			fi
+			if ! is_shutdown "$DOM"; then
+				virsh -q shutdown "$DOM" 1>/dev/null 2>&1
+				if [ $NOTIFY_COUNTER = 10 ]; then
+					NOTIFY_COUNTER=0
+					info "Waiting for shutdown... $COUNTER/$COUNTER_MAX sec."
+				fi
+				sleep 1
+				NOTIFY_COUNTER=$((NOTIFY_COUNTER + 1))
+			else
+				break
+			fi
+			COUNTER=$((COUNTER + 1))
+		done
+	fi
 }
 
 vm_start() {
-    local DOM="$1"
-    debug_funct "vm_start $DOM"
+	local DOM="$1"
+	debug_funct "vm_start $DOM"
 
-    if ! is_running "$DOM"; then
-        info "Start"
-        virsh -q start "$DOM" 1>&2 || error vm_start
-    fi
+	if ! is_running "$DOM"; then
+		info "Start"
+		virsh -q start "$DOM" 1>&2 || error vm_start
+	fi
 }
 
 vm_wait() {
-    local DOM="$1"
-    debug_funct "vm_wait $DOM"
+	local DOM="$1"
+	debug_funct "vm_wait $DOM"
 
-    require_app waitforit
-    require_is_imported "$DOM"
+	require_app waitforit
+	require_is_imported "$DOM"
 
-    #todo: replace with 'virsh domifaddr freebsd11.1' ?
+	#todo: replace with 'virsh domifaddr freebsd11.1' ?
 
-    # find MAC
-    local COUNTER=0
-    local COUNTER_MAX=180
-    local NOTIFY_COUNTER=0
-    local DOM_MAC
-    local DOM_IP
-    local DOM_UP
-    local NETWORK
-    while true; do
-        # 3 minutes maximum network timeout, otherwise consider broken
-        # No reasonable OS should take longer to boot
-        if [ "$COUNTER" = "$COUNTER_MAX" ]; then
-            error "Failed to find an IP adress on networks '$ADMIN_NETWORKS'"
-            break
-        fi
-        if [ -z "$DOM_IP" ]; then
-            # for each network
-            DATA_NETS=$(virsh domiflist "$DOM" | grep network |
-                awk '{print $3,$5}')
-            # test each network for MAC, LINK and IP start with first network
-            for NETWORK in $ADMIN_NETWORKS; do
-                if [ -n "$DOM_MAC" ] && [ -n "$DOM_IP" ] &&
-                    [ "$DOM_UP" = "up" ]; then
-                    # stop iterating on success
-                    break
-                else
-                    # if the current network matches the one form the config
-                    DOM_NET=$(echo "$DATA_NETS" | awk '{print $1}' |
-                        grep "$NETWORK" | head -n1)
-                    if echo "$DOM_NET" | grep -qx "$NETWORK"; then
-                        # get mac
-                        DOM_MAC=$(echo "$DATA_NETS" | grep "$NETWORK" |
-                            head -n1 | awk '{print $2}')
-                        # get link
-                        if [ -n "$DOM_MAC" ]; then
-                            DOM_UP=$(virsh domif-getlink "$DOM" "$DOM_MAC" |
-                                awk '{print $2}')
-                        fi
-                        # get ip
-                        if [ "$DOM_UP" = "up" ]; then
-                            DOM_IP=$(virsh net-dhcp-leases "$NETWORK" |
-                                grep "$DOM_MAC" | awk '{print $5}' |
-                                sed "s|/.*||")
-                        fi
-                        debug "NET:$DOM_NET MAC:$DOM_MAC LINK:$DOM_UP IP:$DOM_IP"
-                    else
-                        debug "skipping network '$NETWORK'"
-                    fi
-                fi
-            done
+	# find MAC
+	local COUNTER=0
+	local COUNTER_MAX=180
+	local NOTIFY_COUNTER=0
+	local DOM_MAC
+	local DOM_IP
+	local DOM_UP
+	local NETWORK
+	while true; do
+		# 3 minutes maximum network timeout, otherwise consider broken
+		# No reasonable OS should take longer to boot
+		if [ "$COUNTER" = "$COUNTER_MAX" ]; then
+			error "Failed to find an IP adress on networks '$ADMIN_NETWORKS'"
+			break
+		fi
+		if [ -z "$DOM_IP" ]; then
+			# for each network
+			DATA_NETS=$(virsh domiflist "$DOM" | grep network |
+				awk '{print $3,$5}')
+			# test each network for MAC, LINK and IP start with first network
+			for NETWORK in $ADMIN_NETWORKS; do
+				if [ -n "$DOM_MAC" ] && [ -n "$DOM_IP" ] &&
+					[ "$DOM_UP" = "up" ]; then
+					# stop iterating on success
+					break
+				else
+					# if the current network matches the one form the config
+					DOM_NET=$(echo "$DATA_NETS" | awk '{print $1}' |
+						grep "$NETWORK" | head -n1)
+					if echo "$DOM_NET" | grep -qx "$NETWORK"; then
+						# get mac
+						DOM_MAC=$(echo "$DATA_NETS" | grep "$NETWORK" |
+							head -n1 | awk '{print $2}')
+						# get link
+						if [ -n "$DOM_MAC" ]; then
+							DOM_UP=$(virsh domif-getlink "$DOM" "$DOM_MAC" |
+								awk '{print $2}')
+						fi
+						# get ip
+						if [ "$DOM_UP" = "up" ]; then
+							DOM_IP=$(virsh net-dhcp-leases "$NETWORK" |
+								grep "$DOM_MAC" | awk '{print $5}' |
+								sed "s|/.*||")
+						fi
+						debug "NET:$DOM_NET MAC:$DOM_MAC LINK:$DOM_UP IP:$DOM_IP"
+					else
+						debug "skipping network '$NETWORK'"
+					fi
+				fi
+			done
 
-            if [ $NOTIFY_COUNTER = 10 ]; then
-                NOTIFY_COUNTER=0
-                info "Waiting for network... $COUNTER/$COUNTER_MAX sec."
-            fi
-            sleep 1
-            NOTIFY_COUNTER=$((NOTIFY_COUNTER + 1))
-        else
-            break
-        fi
-        COUNTER=$((COUNTER + 1))
-    done
-    info "Network: $DOM_NET IP: $DOM_IP MAC: $DOM_MAC"
+			if [ $NOTIFY_COUNTER = 10 ]; then
+				NOTIFY_COUNTER=0
+				info "Waiting for network... $COUNTER/$COUNTER_MAX sec."
+			fi
+			sleep 1
+			NOTIFY_COUNTER=$((NOTIFY_COUNTER + 1))
+		else
+			break
+		fi
+		COUNTER=$((COUNTER + 1))
+	done
+	info "Network: $DOM_NET IP: $DOM_IP MAC: $DOM_MAC"
 
-    # add to /etc/hosts
-    info "Adding host to /etc/hosts"
-    add-to-hosts "$DOM" "$DOM_IP" 1>/dev/null || error add-to-hosts
+	# add to /etc/hosts
+	info "Adding host to /etc/hosts"
+	add-to-hosts "$DOM" "$DOM_IP" 1>/dev/null || error add-to-hosts
 
-    # wait for SSH
-    info "Waiting for SSH..."
-    # timeout after 30 seconds
-    local SSH_RESULT
-    SSH_RESULT=$(waitforit "$DOM_IP" "" 10 0) || error "$SSH_RESULT"
+	# wait for SSH
+	info "Waiting for SSH..."
+	# timeout after 30 seconds
+	local SSH_RESULT
+	SSH_RESULT=$(waitforit "$DOM_IP" "" 10 0) || error "$SSH_RESULT"
 }
 
 #vm_snapshot_create() {
@@ -1162,473 +1205,473 @@ vm_wait() {
 #}
 
 net_action() {
-    local XML_CFG="$1"
-    local XML_CFG_BASE
-    local ACTION="$2"
-    if [ -z "$XML_CFG" ]; then
-        error "net_action empty args XML_CFG"
-    fi
-    if [ -z "$ACTION" ]; then
-        error "net_action empty arg ACTION"
-    fi
-    XML_CFG_BASE=$(basename "$XML_CFG")
-    debug_funct "net_action $XML_CFG_BASE $ACTION"
+	local XML_CFG="$1"
+	local XML_CFG_BASE
+	local ACTION="$2"
+	if [ -z "$XML_CFG" ]; then
+		error "net_action empty args XML_CFG"
+	fi
+	if [ -z "$ACTION" ]; then
+		error "net_action empty arg ACTION"
+	fi
+	XML_CFG_BASE=$(basename "$XML_CFG")
+	debug_funct "net_action $XML_CFG_BASE $ACTION"
 
-    # make sure that all networks exist
-    local DOM_NETS
-    local NET
-    local COUNTER=0
-    DOM_NETS=$(xml_try_get "$XML_CFG" "$XML_TAG_NET")
+	# make sure that all networks exist
+	local DOM_NETS
+	local NET
+	local COUNTER=0
+	DOM_NETS=$(xml_try_get "$XML_CFG" "$XML_TAG_NET")
 
-    # skip if there are no NICs defined
-    if [ -z "$DOM_NETS" ]; then
-        debug "no NICs found"
+	# skip if there are no NICs defined
+	if [ -z "$DOM_NETS" ]; then
+		debug "no NICs found"
 
-    # select an action
-    else
-        # iterate over all found NICs in the domains XML config
-        for NET in $DOM_NETS; do
-            # check that the first NIC also exists as an admin network
-            COUNTER=$((COUNTER + 1))
-            if [ "$COUNTER" = 1 ]; then
-                if echo "$ADMIN_NETWORKS" | grep -q "$NET"; then
-                    debug "network '$NET' exists in $CONF"
-                else
-                    error "network '$NET' is missing from $CONF"
-                fi
-            fi
+	# select an action
+	else
+		# iterate over all found NICs in the domains XML config
+		for NET in $DOM_NETS; do
+			# check that the first NIC also exists as an admin network
+			COUNTER=$((COUNTER + 1))
+			if [ "$COUNTER" = 1 ]; then
+				if echo "$ADMIN_NETWORKS" | grep -q "$NET"; then
+					debug "network '$NET' exists in $CONF"
+				else
+					error "network '$NET' is missing from $CONF"
+				fi
+			fi
 
-            case $ACTION in
-            --net_start)
-                net_start "$NET" || exit 1
-                ;;
-            --net_erase)
-                net_erase "$NET" || exit 1
-                ;;
-            esac
-        done
+			case $ACTION in
+			--net_start)
+				net_start "$NET" || exit 1
+				;;
+			--net_erase)
+				net_erase "$NET" || exit 1
+				;;
+			esac
+		done
 
-    fi
+	fi
 }
 
 net_erase() {
-    local NET="$1"
-    if [ -z "$NET" ]; then
-        error "net_erase unset or empty args"
-    fi
-    debug "removing network '$NET'"
+	local NET="$1"
+	if [ -z "$NET" ]; then
+		error "net_erase unset or empty args"
+	fi
+	debug "removing network '$NET'"
 
-    virsh -q net-destroy "$NET" 1>/dev/null 2>&1
-    virsh -q net-undefine "$NET" 1>/dev/null 2>&1
+	virsh -q net-destroy "$NET" 1>/dev/null 2>&1
+	virsh -q net-undefine "$NET" 1>/dev/null 2>&1
 
-    # verify
-    local ALL_NETWORKS
-    local DIS_NETWORKS
-    ALL_NETWORKS=$(virsh -q net-list --name) || error "net_erase net-list"
-    DIS_NETWORKS=$(virsh -q net-list --inactive --name) ||
-        error "net_erase net-list inactive"
+	# verify
+	local ALL_NETWORKS
+	local DIS_NETWORKS
+	ALL_NETWORKS=$(virsh -q net-list --name) || error "net_erase net-list"
+	DIS_NETWORKS=$(virsh -q net-list --inactive --name) ||
+		error "net_erase net-list inactive"
 
-    # still running
-    if echo "$ALL_NETWORKS" | grep -qx "$NET"; then
-        error "failet to remove network '$NET'"
-    # still imported
-    elif echo "$DIS_NETWORKS" | grep -qx "$NET"; then
-        error "failet to remove network '$NET'"
-    fi
+	# still running
+	if echo "$ALL_NETWORKS" | grep -qx "$NET"; then
+		error "failet to remove network '$NET'"
+	# still imported
+	elif echo "$DIS_NETWORKS" | grep -qx "$NET"; then
+		error "failet to remove network '$NET'"
+	fi
 }
 
 net_start() {
-    local NET="$1"
-    if [ -z "$NET" ]; then
-        error "net_start unset or empty args"
-    fi
-    #todo: also check networks agaien in vm_import as well!
+	local NET="$1"
+	if [ -z "$NET" ]; then
+		error "net_start unset or empty args"
+	fi
+	#todo: also check networks agaien in vm_import as well!
 
-    local ALL_NETWORKS
-    local DIS_NETWORKS
-    local XML_NET_CFG
-    local ISOLATED
-    local BRIDGE
-    local VLAN_PATH
-    local VLAN_FILTER
-    local INFO_FAIL="network '$NET' failed to "
+	local ALL_NETWORKS
+	local DIS_NETWORKS
+	local XML_NET_CFG
+	local ISOLATED
+	local BRIDGE
+	local VLAN_PATH
+	local VLAN_FILTER
+	local INFO_FAIL="network '$NET' failed to "
 
-    ALL_NETWORKS=$(virsh -q net-list --name) || error "net_start net-list"
-    DIS_NETWORKS=$(virsh -q net-list --inactive --name) ||
-        error "net_start net-list inactive"
+	ALL_NETWORKS=$(virsh -q net-list --name) || error "net_start net-list"
+	DIS_NETWORKS=$(virsh -q net-list --inactive --name) ||
+		error "net_start net-list inactive"
 
-    # already running
-    if echo "$ALL_NETWORKS" | grep -qx "$NET"; then
-        debug "network '$NET' exists and is up"
+	# already running
+	if echo "$ALL_NETWORKS" | grep -qx "$NET"; then
+		debug "network '$NET' exists and is up"
 
-    # imported but not running
-    elif echo "$DIS_NETWORKS" | grep -qx "$NET"; then
-        debug "network '$NET' exists and is down"
-        info "Starting network: $NET"
-        # lets assume that the user does not want autostart,
-        # probably because the network is configured elsewhere
-        virsh -q net-start "$NET" || error "$INFO_FAIL start"
+	# imported but not running
+	elif echo "$DIS_NETWORKS" | grep -qx "$NET"; then
+		debug "network '$NET' exists and is down"
+		info "Starting network: $NET"
+		# lets assume that the user does not want autostart,
+		# probably because the network is configured elsewhere
+		virsh -q net-start "$NET" || error "$INFO_FAIL start"
 
-    # not imported
-    else
-        debug "network '$NET' missing"
-        info "Importing network: $NET"
-        XML_NET_CFG="$PATH_IMMUTABLE/networks/$NET.xml"
-        xml_val "$XML_NET_CFG"
+	# not imported
+	else
+		debug "network '$NET' missing"
+		info "Importing network: $NET"
+		XML_NET_CFG="$PATH_IMMUTABLE/networks/$NET.xml"
+		xml_val "$XML_NET_CFG"
 
-        # import network
-        virsh -q net-define "$XML_NET_CFG" || error "$INFO_FAIL import"
-        virsh -q net-autostart "$NET" || error "$INFO_FAIL autostart"
-        virsh -q net-start "$NET" || error "f$INFO_FAIL start"
+		# import network
+		virsh -q net-define "$XML_NET_CFG" || error "$INFO_FAIL import"
+		virsh -q net-autostart "$NET" || error "$INFO_FAIL autostart"
+		virsh -q net-start "$NET" || error "f$INFO_FAIL start"
 
-        # check and enable vlan isolation
-        ISOLATED=$(xml_try_get "$XML_NET_CFG" "network/forward/@mode")
-        if [ -z "$ISOLATED" ]; then
-            BRIDGE=$(xml_get "$XML_NET_CFG" "network/bridge/@name") || exit 1
-            debug "isolating network bridge '$BRIDGE' via vlan_filtering"
-            VLAN_PATH="/sys/devices/virtual/net/$BRIDGE/bridge/vlan_filtering"
-            VLAN_FILTER=$(cat "$VLAN_PATH") || error "cat $VLAN_PATH"
+		# check and enable vlan isolation
+		ISOLATED=$(xml_try_get "$XML_NET_CFG" "network/forward/@mode")
+		if [ -z "$ISOLATED" ]; then
+			BRIDGE=$(xml_get "$XML_NET_CFG" "network/bridge/@name") || exit 1
+			debug "isolating network bridge '$BRIDGE' via vlan_filtering"
+			VLAN_PATH="/sys/devices/virtual/net/$BRIDGE/bridge/vlan_filtering"
+			VLAN_FILTER=$(cat "$VLAN_PATH") || error "cat $VLAN_PATH"
 
-            # enable vlan_filtering
-            #todo: this will reset after reboot, find another solution
-            #bug: https://bugs.launchpad.net/ubuntu/+source/libvirt/+bug/1326536
-            #possible solution: write a daemon that always sets vlan_filtering
-            #possible solution, try if this works with ansible: https://unix.stackexchange.com/questions/10438/can-i-create-a-user-specific-hosts-file-to-complement-etc-hosts
-            ip link set "$BRIDGE" type bridge vlan_filtering 1 ||
-                error "$INFO_FAIL set vlan_filtering for '$BRIDGE'"
+			# enable vlan_filtering
+			#todo: this will reset after reboot, find another solution
+			#bug: https://bugs.launchpad.net/ubuntu/+source/libvirt/+bug/1326536
+			#possible solution: write a daemon that always sets vlan_filtering
+			#possible solution, try if this works with ansible: https://unix.stackexchange.com/questions/10438/can-i-create-a-user-specific-hosts-file-to-complement-etc-hosts
+			ip link set "$BRIDGE" type bridge vlan_filtering 1 ||
+				error "$INFO_FAIL set vlan_filtering for '$BRIDGE'"
 
-            # verify
-            VLAN_FILTER=$(cat "$VLAN_PATH")
-            if [ "$VLAN_FILTER" -ne 1 ]; then
-                error "$INFO_FAIL set vlan_filtering for '$BRIDGE'"
-            fi
-        fi
+			# verify
+			VLAN_FILTER=$(cat "$VLAN_PATH")
+			if [ "$VLAN_FILTER" -ne 1 ]; then
+				error "$INFO_FAIL set vlan_filtering for '$BRIDGE'"
+			fi
+		fi
 
-    fi
+	fi
 }
 
 is_deploying() {
-    # shellcheck disable=SC2009
-    RUNNING_INSTANCES=$(ps -eo args | grep -v grep | grep "vmh import-")
+	# shellcheck disable=SC2009
+	RUNNING_INSTANCES=$(ps -eo args | grep -v grep | grep "vmh import-")
 
-    if [ -n "$RUNNING_INSTANCES" ]; then
-        return 0
-    else
-        return 1
-    fi
+	if [ -n "$RUNNING_INSTANCES" ]; then
+		return 0
+	else
+		return 1
+	fi
 }
 
 wait_for_domain_batch() {
-    # wait for all running deployments to finish
-    local COUNTER=0
-    local COUNTER_MAX=900
-    local NOTIFY_COUNTER=0
-    while true; do
-        # 30 minutes maximum timeout to wait
-        # for all previous deployments to finish
-        # Otherwise consider deployment is hung / has failed
-        if [ "$COUNTER" = "$COUNTER_MAX" ]; then
-            error "Deployment timout, check for hanging 'vmh' processes"
-            break
-        fi
-        # wait for the current order to finish
-        if is_deploying; then
-            debug "waiting for previous deployments to finish"
-            if [ $NOTIFY_COUNTER = 10 ]; then
-                NOTIFY_COUNTER=0
-                info "Waiting on deployment... $COUNTER/$COUNTER_MAX sec."
-            fi
-            sleep 1
-            NOTIFY_COUNTER=$((NOTIFY_COUNTER + 1))
-        else
-            break
-        fi
-        COUNTER=$((COUNTER + 1))
-    done
+	# wait for all running deployments to finish
+	local COUNTER=0
+	local COUNTER_MAX=900
+	local NOTIFY_COUNTER=0
+	while true; do
+		# 30 minutes maximum timeout to wait
+		# for all previous deployments to finish
+		# Otherwise consider deployment is hung / has failed
+		if [ "$COUNTER" = "$COUNTER_MAX" ]; then
+			error "Deployment timout, check for hanging 'vmh' processes"
+			break
+		fi
+		# wait for the current order to finish
+		if is_deploying; then
+			debug "waiting for previous deployments to finish"
+			if [ $NOTIFY_COUNTER = 10 ]; then
+				NOTIFY_COUNTER=0
+				info "Waiting on deployment... $COUNTER/$COUNTER_MAX sec."
+			fi
+			sleep 1
+			NOTIFY_COUNTER=$((NOTIFY_COUNTER + 1))
+		else
+			break
+		fi
+		COUNTER=$((COUNTER + 1))
+	done
 }
 
 env_check() {
-    local FILE_DOMAINS="$PATH_IMMUTABLE/$1.csv"
-    debug_funct "env_check $FILE_DOMAINS"
+	local FILE_DOMAINS="$PATH_IMMUTABLE/$1.csv"
+	debug_funct "env_check $FILE_DOMAINS"
 
-    # verify file
-    if [ ! -f "$FILE_DOMAINS" ]; then
-        error "$FILE_DOMAINS does not exist"
-    fi
+	# verify file
+	if [ ! -f "$FILE_DOMAINS" ]; then
+		error "$FILE_DOMAINS does not exist"
+	fi
 
-    local DOM_NAME
-    local DOM_SOURCE
-    local DOM_ORDER
-    local COUNTER=0
-    local XML_CFG
-    local DISKS
-    local DISKS_PATHS
-    local M_DISK_SRC
-    local DOM_NETS
+	local DOM_NAME
+	local DOM_SOURCE
+	local DOM_ORDER
+	local COUNTER=0
+	local XML_CFG
+	local DISKS
+	local DISKS_PATHS
+	local M_DISK_SRC
+	local DOM_NETS
 
-    # for each domain
-    # shellcheck disable=SC2094
-    while read -r line; do
-        COUNTER=$((COUNTER + 1))
-        # deploy domains with the same order in parallel
-        DOM_ORDER=$(echo "$line" | awk -F',' '{print $1}')
-        DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
-        DOM_SOURCE=$(echo "$line" | awk -F',' '{print $3}')
-        LINE_INFO=", on line $COUNTER in $FILE_DOMAINS"
+	# for each domain
+	# shellcheck disable=SC2094
+	while read -r line; do
+		COUNTER=$((COUNTER + 1))
+		# deploy domains with the same order in parallel
+		DOM_ORDER=$(echo "$line" | awk -F',' '{print $1}')
+		DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
+		DOM_SOURCE=$(echo "$line" | awk -F',' '{print $3}')
+		LINE_INFO=", on line $COUNTER in $FILE_DOMAINS"
 
-        # verify input
-        # for order
-        if [ -z "$DOM_ORDER" ]; then
-            DOM_ORDER=1
-        fi
-        case $DOM_ORDER in
-        '' | *[!0-9]*)
-            error "variable ORDER must be a number$LINE_INFO"
-            ;;
-        esac
-        # for name
-        if [ -z "$DOM_NAME" ]; then
-            error "variable NAME is empty$LINE_INFO"
-        fi
-        case "$DOM_NAME" in
-        '' | *[' !&()'@#$%^*+]*)
-            error "invalid variable for NAME$LINE_INFO"
-            ;;
-        esac
-        # for source
-        if [ -z "$DOM_SOURCE" ]; then
-            error "variable SOURCE is empty$LINE_INFO"
-        fi
-        case "$DOM_SOURCE" in
-        '' | *[' !&()'@#$%^*+]*)
-            error "invalid variable for SOURCE$LINE_INFO"
-            ;;
-        esac
+		# verify input
+		# for order
+		if [ -z "$DOM_ORDER" ]; then
+			DOM_ORDER=1
+		fi
+		case $DOM_ORDER in
+		'' | *[!0-9]*)
+			error "variable ORDER must be a number$LINE_INFO"
+			;;
+		esac
+		# for name
+		if [ -z "$DOM_NAME" ]; then
+			error "variable NAME is empty$LINE_INFO"
+		fi
+		case "$DOM_NAME" in
+		'' | *[' !&()'@#$%^*+]*)
+			error "invalid variable for NAME$LINE_INFO"
+			;;
+		esac
+		# for source
+		if [ -z "$DOM_SOURCE" ]; then
+			error "variable SOURCE is empty$LINE_INFO"
+		fi
+		case "$DOM_SOURCE" in
+		'' | *[' !&()'@#$%^*+]*)
+			error "invalid variable for SOURCE$LINE_INFO"
+			;;
+		esac
 
-        XML_CFG="$PATH_IMMUTABLE/$DOM_SOURCE.xml"
-        debug "XML_CFG $XML_CFG"
-        # verify initial XML
-        xml_val "$XML_CFG"
-        # find disk chain
-        DISKS=$(xml_get "$XML_CFG" "$XML_TAG_DISK_AND_DVD") || exit 1
-        DISKS_PATHS=$(echo "$DISKS" | sed "s;$POOL_PH;$PATH_IMMUTABLE/;g")
+		XML_CFG="$PATH_IMMUTABLE/$DOM_SOURCE.xml"
+		debug "XML_CFG $XML_CFG"
+		# verify initial XML
+		xml_val "$XML_CFG"
+		# find disk chain
+		DISKS=$(xml_get "$XML_CFG" "$XML_TAG_DISK_AND_DVD") || exit 1
+		DISKS_PATHS=$(echo "$DISKS" | sed "s;$POOL_PLHO;$PATH_IMMUTABLE/;g")
 
-        # verify source disk file
-        local i
-        for i in $DISKS_PATHS; do
-            debug "checking disk: $i"
-            if [ ! -f "$i" ]; then
-                error "missing source disk $i$LINE_INFO"
-            fi
-        done
+		# verify source disk file
+		local i
+		for i in $DISKS_PATHS; do
+			debug "verify disk: $i"
+			if [ ! -f "$i" ]; then
+				error "missing source disk $i$LINE_INFO"
+			fi
+		done
 
-        # make sure that all networks exist
-        net_action "$XML_CFG" --net_start
+		# make sure that all networks exist
+		net_action "$XML_CFG" --net_start
 
-    done <"$FILE_DOMAINS"
+	done <"$FILE_DOMAINS"
 }
 
 env_deploy() {
-    local FILE_DOMAINS="$PATH_IMMUTABLE/$1.csv"
-    debug_funct "env_deploy $FILE_DOMAINS"
+	local FILE_DOMAINS="$PATH_IMMUTABLE/$1.csv"
+	debug_funct "env_deploy $FILE_DOMAINS"
 
-    local DOM_NAME
-    local DOM_NAME_OLD
-    local DOM_SOURCE
-    local DOM_ORDER
-    local DOM_ORDER_OLD
-    local COUNTER=0
-    local COUNTER_OLD=1
-    local TOTAL
-    local EXTRA_DEBUG_INFO
-    TOTAL=$(wc -l <"$FILE_DOMAINS")
-    # for each domain
-    # shellcheck disable=SC2094
-    while read -r line; do
-        COUNTER=$((COUNTER + 1))
-        # deploy domains with the same order in parallel
-        DOM_ORDER=$(echo "$line" | awk -F',' '{print $1}')
-        DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
-        DOM_SOURCE=$(echo "$line" | awk -F',' '{print $3}')
-        debug "[ start line $COUNTER: ( $DOM_ORDER $DOM_NAME $DOM_SOURCE )"
+	local DOM_NAME
+	local DOM_NAME_OLD
+	local DOM_SOURCE
+	local DOM_ORDER
+	local DOM_ORDER_OLD
+	local COUNTER=0
+	local COUNTER_OLD=1
+	local TOTAL
+	local EXTRA_DEBUG_INFO
+	TOTAL=$(wc -l <"$FILE_DOMAINS")
+	# for each domain
+	# shellcheck disable=SC2094
+	while read -r line; do
+		COUNTER=$((COUNTER + 1))
+		# deploy domains with the same order in parallel
+		DOM_ORDER=$(echo "$line" | awk -F',' '{print $1}')
+		DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
+		DOM_SOURCE=$(echo "$line" | awk -F',' '{print $3}')
+		debug "[ start line $COUNTER: ( $DOM_ORDER $DOM_NAME $DOM_SOURCE )"
 
-        # set default order
-        if [ -z "$DOM_ORDER" ]; then
-            debug "variable ORDER is empty, falling back to '1'"
-            DOM_ORDER=1
-        fi
+		# set default order
+		if [ -z "$DOM_ORDER" ]; then
+			debug "variable ORDER is empty, falling back to '1'"
+			DOM_ORDER=1
+		fi
 
-        # first item in list
-        if [ -z "$DOM_ORDER_OLD" ]; then
-            DOM_ORDER_OLD=$((DOM_ORDER - 1))
-            EXTRA_DEBUG_INFO="first in order"
-        # if the order is different from the last one,
-        # wait for previous to finish
-        elif [ "$DOM_ORDER" != "$DOM_ORDER_OLD" ]; then
-            info "Waiting   $COUNTER_OLD/$TOTAL [$DOM_ORDER_OLD] $DOM_NAME_OLD"
-            wait_for_domain_batch
-            vmh wait "$DOM_NAME_OLD" 1>/dev/null 2>&1 || exit 1
-            EXTRA_DEBUG_INFO="proceeding to next order"
-        else
-            EXTRA_DEBUG_INFO="staying in the same order"
-        fi
-        debug "$EXTRA_DEBUG_INFO $DOM_ORDER_OLD --> $DOM_ORDER"
+		# first item in list
+		if [ -z "$DOM_ORDER_OLD" ]; then
+			DOM_ORDER_OLD=$((DOM_ORDER - 1))
+			EXTRA_DEBUG_INFO="first in order"
+		# if the order is different from the last one,
+		# wait for previous to finish
+		elif [ "$DOM_ORDER" != "$DOM_ORDER_OLD" ]; then
+			info "Waiting   $COUNTER_OLD/$TOTAL [$DOM_ORDER_OLD] $DOM_NAME_OLD"
+			wait_for_domain_batch
+			vmh wait "$DOM_NAME_OLD" 1>/dev/null 2>&1 || exit 1
+			EXTRA_DEBUG_INFO="proceeding to next order"
+		else
+			EXTRA_DEBUG_INFO="staying in the same order"
+		fi
+		debug "$EXTRA_DEBUG_INFO $DOM_ORDER_OLD --> $DOM_ORDER"
 
-        # issue warning if newer order is smaller than the last one
-        if [ "$DOM_ORDER" -lt "$DOM_ORDER_OLD" ]; then
-            warn_cont "Next order is less than previous, please sort your list"
-        fi
+		# issue warning if newer order is smaller than the last one
+		if [ "$DOM_ORDER" -lt "$DOM_ORDER_OLD" ]; then
+			warn_cont "Next order is less than previous, please sort your list"
+		fi
 
-        # deploy a new batch in parallel
-        info "Deploying $COUNTER/$TOTAL [$DOM_ORDER] $DOM_NAME"
-        vmh import-chain-start "$DOM_NAME" "$DOM_SOURCE" 1>/dev/null 2>&1 &
-        #todo: verify returncodes from a file
-        # waiting here actually increases the deployment time because
-        # of spreading out the IO and CPU usage over a short time
-        sleep 1
+		# deploy a new batch in parallel
+		info "Deploying $COUNTER/$TOTAL [$DOM_ORDER] $DOM_NAME"
+		vmh import-chain-start "$DOM_NAME" "$DOM_SOURCE" 1>/dev/null 2>&1 &
+		#todo: verify returncodes from a file
+		# waiting here actually increases the deployment time because
+		# of spreading out the IO and CPU usage over a short time
+		sleep 1
 
-        # remember last deployed domain
-        DOM_NAME_OLD="$DOM_NAME"
-        DOM_ORDER_OLD="$DOM_ORDER"
-        COUNTER_OLD="$COUNTER"
-        debug "] end   line $COUNTER"
-    done <"$FILE_DOMAINS"
+		# remember last deployed domain
+		DOM_NAME_OLD="$DOM_NAME"
+		DOM_ORDER_OLD="$DOM_ORDER"
+		COUNTER_OLD="$COUNTER"
+		debug "] end   line $COUNTER"
+	done <"$FILE_DOMAINS"
 
-    # wait for last domain
-    info "Waiting   $COUNTER/$TOTAL [$DOM_ORDER] $DOM_NAME"
-    wait_for_domain_batch
-    vmh wait "$DOM_NAME" 1>/dev/null 2>&1
+	# wait for last domain
+	info "Waiting   $COUNTER/$TOTAL [$DOM_ORDER] $DOM_NAME"
+	wait_for_domain_batch
+	vmh wait "$DOM_NAME" 1>/dev/null 2>&1
 }
 
 env_erase() {
-    local FILE_DOMAINS="$PATH_IMMUTABLE/$1.csv"
-    debug_funct "env_erase $FILE_DOMAINS"
+	local FILE_DOMAINS="$PATH_IMMUTABLE/$1.csv"
+	debug_funct "env_erase $FILE_DOMAINS"
 
-    # verify file
-    if [ ! -f "$FILE_DOMAINS" ]; then
-        error "$FILE_DOMAINS does not exist"
-    fi
+	# verify file
+	if [ ! -f "$FILE_DOMAINS" ]; then
+		error "$FILE_DOMAINS does not exist"
+	fi
 
-    local DOM_NAME
-    local LINE_COUNTER=0
-    local TOTAL
-    TOTAL=$(wc -l <"$FILE_DOMAINS")
-    # for each domain
-    while read -r line; do
-        LINE_COUNTER=$((LINE_COUNTER + 1))
-        DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
+	local DOM_NAME
+	local LINE_COUNTER=0
+	local TOTAL
+	TOTAL=$(wc -l <"$FILE_DOMAINS")
+	# for each domain
+	while read -r line; do
+		LINE_COUNTER=$((LINE_COUNTER + 1))
+		DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
 
-        # erase domain in parallel
-        info "Erasing $LINE_COUNTER/$TOTAL $DOM_NAME"
-        # todo: make this a parallel process as well
-        # todo: also kill all wait and vmh import* processes with the matching domain name
-        vmh erase "$DOM_NAME" 1>/dev/null 2>&1
+		# erase domain in parallel
+		info "Erasing $LINE_COUNTER/$TOTAL $DOM_NAME"
+		# todo: make this a parallel process as well
+		# todo: also kill all wait and vmh import* processes with the matching domain name
+		vmh erase "$DOM_NAME" 1>/dev/null 2>&1
 
-    done <"$FILE_DOMAINS"
+	done <"$FILE_DOMAINS"
 }
 
 env_erase_net() {
-    local FILE_DOMAINS="$PATH_IMMUTABLE/$1.csv"
-    debug_funct "env_erase_net $FILE_DOMAINS"
+	local FILE_DOMAINS="$PATH_IMMUTABLE/$1.csv"
+	debug_funct "env_erase_net $FILE_DOMAINS"
 
-    # verify file
-    if [ ! -f "$FILE_DOMAINS" ]; then
-        error "$FILE_DOMAINS does not exist"
-    fi
+	# verify file
+	if [ ! -f "$FILE_DOMAINS" ]; then
+		error "$FILE_DOMAINS does not exist"
+	fi
 
-    local DISK_SRC
-    local LINE_COUNTER=0
-    local TOTAL
-    TOTAL=$(wc -l <"$FILE_DOMAINS")
-    # for each source disk
-    while read -r line; do
-        LINE_COUNTER=$((LINE_COUNTER + 1))
-        DISK_SRC=$(echo "$line" | awk -F',' '{print $3}')
+	local DISK_SRC
+	local LINE_COUNTER=0
+	local TOTAL
+	TOTAL=$(wc -l <"$FILE_DOMAINS")
+	# for each source disk
+	while read -r line; do
+		LINE_COUNTER=$((LINE_COUNTER + 1))
+		DISK_SRC=$(echo "$line" | awk -F',' '{print $3}')
 
-        # erase networks
-        vmh erase-net "$DISK_SRC" 1>/dev/null 2>&1
+		# erase networks
+		vmh erase-net "$DISK_SRC" 1>/dev/null 2>&1
 
-    done <"$FILE_DOMAINS"
+	done <"$FILE_DOMAINS"
 }
 
 env_wait() {
-    local FILE_DOMAINS="$PATH_IMMUTABLE/$1.csv"
-    debug_funct "env_wait $FILE_DOMAINS"
+	local FILE_DOMAINS="$PATH_IMMUTABLE/$1.csv"
+	debug_funct "env_wait $FILE_DOMAINS"
 
-    # verify file
-    if [ ! -f "$FILE_DOMAINS" ]; then
-        error "$FILE_DOMAINS does not exist"
-    fi
+	# verify file
+	if [ ! -f "$FILE_DOMAINS" ]; then
+		error "$FILE_DOMAINS does not exist"
+	fi
 
-    local DOM_NAME
-    local LINE_COUNTER=0
-    local TOTAL
-    TOTAL=$(wc -l <"$FILE_DOMAINS")
+	local DOM_NAME
+	local LINE_COUNTER=0
+	local TOTAL
+	TOTAL=$(wc -l <"$FILE_DOMAINS")
 
-    local TMP_DOMAINS
-    TMP_DOMAINS=$(mktemp) || error "env_wait mktemp"
-    local TMP_WAIT
-    TMP_WAIT=$(mktemp) || error "env_wait mktemp"
+	local TMP_DOMAINS
+	TMP_DOMAINS=$(mktemp) || error "env_wait mktemp"
+	local TMP_WAIT
+	TMP_WAIT=$(mktemp) || error "env_wait mktemp"
 
-    # start a background process for each domain
-    while read -r line; do
-        LINE_COUNTER=$((LINE_COUNTER + 1))
-        DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
-        # add domain to a file to later compare to
-        echo "$DOM_NAME" >>"$TMP_DOMAINS"
+	# start a background process for each domain
+	while read -r line; do
+		LINE_COUNTER=$((LINE_COUNTER + 1))
+		DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
+		# add domain to a file to later compare to
+		echo "$DOM_NAME" >>"$TMP_DOMAINS"
 
-        # wait for domain in parallel
-        info "Waiting   $LINE_COUNTER/$TOTAL $DOM_NAME"
-        vmh wait "$DOM_NAME" 1>/dev/null 2>&1 &&
-            echo "$DOM_NAME" >>"$TMP_WAIT" &
+		# wait for domain in parallel
+		info "Waiting   $LINE_COUNTER/$TOTAL $DOM_NAME"
+		vmh wait "$DOM_NAME" 1>/dev/null 2>&1 &&
+			echo "$DOM_NAME" >>"$TMP_WAIT" &
 
-    done <"$FILE_DOMAINS"
+	done <"$FILE_DOMAINS"
 
-    # wait for all processes to finish and verify result
-    local COUNTER=0
-    # COUNTER_MAX should be the same as in function vm_wait
-    local COUNTER_MAX=180
-    local NOTIFY_COUNTER=0
-    local RESULT_DOMAINS
-    local RESULT_WAIT
-    while true; do
-        # 60 seconds maximum timeout to wait
-        # Otherwise consider wait has failed
-        if [ "$COUNTER" = "$COUNTER_MAX" ]; then
-            # keep only domains with errors
-            while read -r line; do
-                sed -i "/^$line\b/Id" "$TMP_DOMAINS"
-            done <"$TMP_WAIT"
-            # show failed domains
-            while read -r line; do
-                warn_cont "Wait failed for $line"
-            done <"$TMP_DOMAINS"
-            # clean up
-            rm "$TMP_DOMAINS"
-            rm "$TMP_WAIT"
-            # abort with error
-            error "Wait timout, check above domains MAC, IP and SSH"
-            break
-        fi
-        # every domain connected correctly
-        RESULT_DOMAINS=$(sort "$TMP_DOMAINS")
-        RESULT_WAIT=$(sort "$TMP_WAIT")
-        if [ "$RESULT_DOMAINS" = "$RESULT_WAIT" ]; then
-            break
-        else
-            if [ $NOTIFY_COUNTER = 10 ]; then
-                NOTIFY_COUNTER=0
-                info "Waiting for domains... $COUNTER/$COUNTER_MAX sec."
-            fi
-            sleep 1
-            NOTIFY_COUNTER=$((NOTIFY_COUNTER + 1))
-        fi
-        COUNTER=$((COUNTER + 1))
-    done
+	# wait for all processes to finish and verify result
+	local COUNTER=0
+	# COUNTER_MAX should be the same as in function vm_wait
+	local COUNTER_MAX=180
+	local NOTIFY_COUNTER=0
+	local RESULT_DOMAINS
+	local RESULT_WAIT
+	while true; do
+		# 60 seconds maximum timeout to wait
+		# Otherwise consider wait has failed
+		if [ "$COUNTER" = "$COUNTER_MAX" ]; then
+			# keep only domains with errors
+			while read -r line; do
+				sed -i "/^$line\b/Id" "$TMP_DOMAINS"
+			done <"$TMP_WAIT"
+			# show failed domains
+			while read -r line; do
+				warn_cont "Wait failed for $line"
+			done <"$TMP_DOMAINS"
+			# clean up
+			rm "$TMP_DOMAINS"
+			rm "$TMP_WAIT"
+			# abort with error
+			error "Wait timout, check above domains MAC, IP and SSH"
+			break
+		fi
+		# every domain connected correctly
+		RESULT_DOMAINS=$(sort "$TMP_DOMAINS")
+		RESULT_WAIT=$(sort "$TMP_WAIT")
+		if [ "$RESULT_DOMAINS" = "$RESULT_WAIT" ]; then
+			break
+		else
+			if [ $NOTIFY_COUNTER = 10 ]; then
+				NOTIFY_COUNTER=0
+				info "Waiting for domains... $COUNTER/$COUNTER_MAX sec."
+			fi
+			sleep 1
+			NOTIFY_COUNTER=$((NOTIFY_COUNTER + 1))
+		fi
+		COUNTER=$((COUNTER + 1))
+	done
 
-    # clean up
-    rm "$TMP_DOMAINS"
-    rm "$TMP_WAIT"
+	# clean up
+	rm "$TMP_DOMAINS"
+	rm "$TMP_WAIT"
 }
 
 ### MAIN ######################################################################
@@ -1642,113 +1685,113 @@ debug "ADMIN_NETWORKS $ADMIN_NETWORKS"
 # select program
 case $ACTION in
 chain)
-    vm_shutdown "$DOMAIN_SRC"
-    vm_chain "$DOMAIN_DES" "$DOMAIN_SRC"
-    ;;
+	vm_shutdown "$DOMAIN_SRC"
+	vm_chain "$DOMAIN_DES" "$DOMAIN_SRC"
+	;;
 chain-start)
-    vm_shutdown "$DOMAIN_SRC"
-    vm_chain "$DOMAIN_DES" "$DOMAIN_SRC"
-    vm_start "$DOMAIN_DES"
-    ;;
+	vm_shutdown "$DOMAIN_SRC"
+	vm_chain "$DOMAIN_DES" "$DOMAIN_SRC"
+	vm_start "$DOMAIN_DES"
+	;;
 chain-start-wait)
-    vm_shutdown "$DOMAIN_SRC"
-    vm_chain "$DOMAIN_DES" "$DOMAIN_SRC"
-    vm_start "$DOMAIN_DES"
-    vm_wait "$DOMAIN_DES"
-    ;;
+	vm_shutdown "$DOMAIN_SRC"
+	vm_chain "$DOMAIN_DES" "$DOMAIN_SRC"
+	vm_start "$DOMAIN_DES"
+	vm_wait "$DOMAIN_DES"
+	;;
 chain-info)
-    vm_chain_info "$DOMAIN_SRC"
-    ;;
+	vm_chain_info "$DOMAIN_SRC"
+	;;
 chain-rebase-immutable)
-    vm_rebase_chain_disk "$DOMAIN_SRC" "$PATH_IMMUTABLE"
-    ;;
+	vm_rebase_chain_disk "$DOMAIN_SRC" "$PATH_IMMUTABLE"
+	;;
 destroy)
-    vm_destroy "$DOMAIN_SRC"
-    ;;
+	vm_destroy "$DOMAIN_SRC"
+	;;
 erase)
-    vm_destroy "$DOMAIN_SRC"
-    vm_erase "$DOMAIN_SRC"
-    ;;
+	vm_destroy "$DOMAIN_SRC"
+	vm_erase "$DOMAIN_SRC"
+	;;
 erase-net)
-    vm_erase_net "$DOMAIN_SRC"
-    ;;
+	vm_erase_net "$DOMAIN_SRC"
+	;;
 export-copy)
-    vm_shutdown "$DOMAIN_DES"
-    vm_export --copy "$DOMAIN_DES" "$DOMAIN_SRC"
-    ;;
+	vm_shutdown "$DOMAIN_DES"
+	vm_export --copy "$DOMAIN_DES" "$DOMAIN_SRC"
+	;;
 export-merge)
-    vm_shutdown "$DOMAIN_DES"
-    vm_export --merge "$DOMAIN_DES" "$DOMAIN_SRC"
-    ;;
+	vm_shutdown "$DOMAIN_DES"
+	vm_export --merge "$DOMAIN_DES" "$DOMAIN_SRC"
+	;;
 export-merge-fast)
-    vm_shutdown "$DOMAIN_DES"
-    vm_export --merge-fast "$DOMAIN_DES" "$DOMAIN_SRC"
-    ;;
+	vm_shutdown "$DOMAIN_DES"
+	vm_export --merge-fast "$DOMAIN_DES" "$DOMAIN_SRC"
+	;;
 import-chain)
-    vm_import --chain "$DOMAIN_DES" "$DOMAIN_SRC"
-    ;;
+	vm_import --chain "$DOMAIN_DES" "$DOMAIN_SRC"
+	;;
 import-chain-start)
-    vm_import --chain "$DOMAIN_DES" "$DOMAIN_SRC"
-    vm_start "$DOMAIN_SRC"
-    ;;
+	vm_import --chain "$DOMAIN_DES" "$DOMAIN_SRC"
+	vm_start "$DOMAIN_SRC"
+	;;
 import-chain-start-wait)
-    vm_import --chain "$DOMAIN_DES" "$DOMAIN_SRC"
-    vm_start "$DOMAIN_SRC"
-    vm_wait "$DOMAIN_SRC"
-    ;;
+	vm_import --chain "$DOMAIN_DES" "$DOMAIN_SRC"
+	vm_start "$DOMAIN_SRC"
+	vm_wait "$DOMAIN_SRC"
+	;;
 import-clone)
-    vm_import --clone "$DOMAIN_DES" "$DOMAIN_SRC"
-    ;;
+	vm_import --clone "$DOMAIN_DES" "$DOMAIN_SRC"
+	;;
 import-link)
-    vm_import --link "$DOMAIN_DES" "$DOMAIN_SRC"
-    ;;
+	vm_import --link "$DOMAIN_DES" "$DOMAIN_SRC"
+	;;
 purge)
-    vm_purge_pool "$DOMAIN_SRC"
-    ;;
+	vm_purge_pool "$DOMAIN_SRC"
+	;;
 purge-immutable)
-    vm_purge_immutable "$DOMAIN_SRC"
-    ;;
+	vm_purge_immutable "$DOMAIN_SRC"
+	;;
 shutdown)
-    vm_shutdown "$DOMAIN_SRC"
-    ;;
+	vm_shutdown "$DOMAIN_SRC"
+	;;
 start)
-    vm_start "$DOMAIN_SRC"
-    ;;
+	vm_start "$DOMAIN_SRC"
+	;;
 start-wait)
-    vm_start "$DOMAIN_SRC"
-    vm_wait "$DOMAIN_SRC"
-    ;;
+	vm_start "$DOMAIN_SRC"
+	vm_wait "$DOMAIN_SRC"
+	;;
 wait)
-    vm_wait "$DOMAIN_SRC"
-    ;;
+	vm_wait "$DOMAIN_SRC"
+	;;
 env-deploy)
-    # also measure time
-    TIME_START=$(date +%s)
-    env_check "$DOMAIN_SRC"
-    env_deploy "$DOMAIN_SRC"
-    info "Checking domains"
-    env_wait "$DOMAIN_SRC"
-    TIME_END=$(date +%s)
-    TIME_RESULT=$((TIME_END - TIME_START))
-    TIME_INFO=$(echo "$TIME_RESULT" | awk '{print int($1/60)":"int($1%60)}')
-    info "Deploy time $TIME_INFO"
-    ;;
+	# also measure time
+	TIME_START=$(date +%s)
+	env_check "$DOMAIN_SRC"
+	env_deploy "$DOMAIN_SRC"
+	info "Checking domains"
+	env_wait "$DOMAIN_SRC"
+	TIME_END=$(date +%s)
+	TIME_RESULT=$((TIME_END - TIME_START))
+	TIME_INFO=$(echo "$TIME_RESULT" | awk '{print int($1/60)":"int($1%60)}')
+	info "Deploy time $TIME_INFO"
+	;;
 env-erase)
-    env_erase "$DOMAIN_SRC"
-    ;;
+	env_erase "$DOMAIN_SRC"
+	;;
 env-erase-net)
-    env_erase_net "$DOMAIN_SRC"
-    ;;
+	env_erase_net "$DOMAIN_SRC"
+	;;
 env-erase-full)
-    env_erase "$DOMAIN_SRC"
-    env_erase_net "$DOMAIN_SRC"
-    ;;
+	env_erase "$DOMAIN_SRC"
+	env_erase_net "$DOMAIN_SRC"
+	;;
 env-wait)
-    env_wait "$DOMAIN_SRC"
-    ;;
+	env_wait "$DOMAIN_SRC"
+	;;
 *)
-    error "Unknown action parameter '$ACTION'"
-    ;;
+	error "Unknown action parameter '$ACTION'"
+	;;
 esac
 
 debug "### DONE $ACTION #####################################"
