@@ -1,0 +1,49 @@
+#!/bin/python3
+import sys
+import os
+import libvirt
+
+domName = None
+try:
+    domName = str(sys.argv[1])
+except IndexError:
+    print("Missing DOMAIN parameter")
+    exit(1)
+
+conn = None
+try:
+    conn = libvirt.open("qemu:///system")
+except libvirt.libvirtError as e:
+    print(repr(e), file=sys.stderr)
+    exit(1)
+
+dom = None
+try:
+    dom = conn.lookupByName(domName)
+except libvirt.libvirtError as e:
+    print(repr(e), file=sys.stderr)
+    exit(1)
+
+file_out = None
+try:
+    file_out = str(sys.argv[2]) + '.ppm'
+except IndexError:
+    path_home = os.path.expanduser("~")
+    file_out = path_home + "/shot_" + dom.name() + ".ppm"
+
+stream = conn.newStream()
+imageType = dom.screenshot(stream, 0)
+
+fileHandler = open(file_out, 'wb')
+streamBytes = stream.recv(262120)
+
+while streamBytes != b'':
+    fileHandler.write(streamBytes)
+    streamBytes = stream.recv(262120)
+fileHandler.close()
+
+print('Screenshot saved to: ' + file_out)
+stream.finish()
+
+conn.close()
+exit(0)

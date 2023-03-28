@@ -1,14 +1,14 @@
-vmh(1) -- Virtual Machine Handler, Virsh CLI wrapper with extra features
+vmh(1) -- Advanced libvirt manager for smart mass and paralell deployment
 =============================================
 
 ## SYNOPSIS
 
-'vmh (virtualmachinehandler)': Advanced actions for libvirt domains
-`vmh <ACTION> <DOMAIN|DOMAIN_DESTINATION|DISK_NAME|ENVIRONMENT> [DOMAIN]`
+'vmh (virtualmachinehandler)': Advanced actions for libvirt domains  
+`vmh <ACTION> <DOMAIN|DOMAIN_DESTINATION|DISK_NAME|ENVIRONMENT|CONFIG_TAG> [DOMAIN]|<CONFIG_VARIABLE>`
 
 ## DESCRIPTION
 
-Virsh CLI wrapper with extra features.
+Advanced libvirt manager for smart mass and paralell deployment
 
 * Mass and parallel deployment of domains
 * Automatic deployment of virtual networks
@@ -29,6 +29,11 @@ Virsh CLI wrapper with extra features.
 Config file is in /etc/vmh.conf  
 Open the default config file for more information.
 
+To create all required folders and set correct file permissions run:  
+`sudo vmh init`  
+This can be useful if you want to set up environment files before you have run
+vmh for the first time.
+
 ## ACTION
 
 Use the `<action>` variable to manipulate domains in different ways.
@@ -45,6 +50,22 @@ Use the `<action>` variable to manipulate domains in different ways.
   disk's metadata to point to a relative path. Use this if you import disk
   chains that are not created with vmh.
 * `destroy <DOMAIN>` : Hard shutdown the domain.
+* `env-deploy <ENVIRONMENT>` : Smart deploy multible domains in parallel or/and
+  in series. Iterates through the file: `<PATH_IMMUTABLE>/<ENVIRONMENT>.csv` .
+  Will automatical import and start networks from XMLs, found
+  in `<PATH_IMMUTABLE>/networks/<NETWORK>.xml` . See 'ENVIRONMENT FILE
+  STRUCTURE'. Based on 'import-chain-start' and 'wait'.
+* `env-erase <ENVIRONMENT>` : Works in reverse to 'env-deploy'. Based on the
+  action 'erase'. Requires the ENVIRONMENT file.
+* `env-erase-full <ENVIRONMENT>` : Same as 'env-erase' and then 'env-erase-net'
+  combined.
+* `env-erase-net <ENVIRONMENT>` : Erase all networks found in an environment
+  CSV. Based on the action 'erase-net'. Requires the ENVIRONMENT file.
+* `env-map <ENVIRONMENT>` : Generate an SVG image of the environment network.
+  Files will be stored in the PATH_ENVIRONMENTS folder.
+* `env-wait <ENVIRONMENT>` : Based on the action 'wait'. Requires the
+  ENVIRONMENT file. Can be used to quickly test/verify an already deployed
+  environment.
 * `erase <DOMAIN>` : 'destroy', remove all disk chains and undefine the domain.
   Will also remove the host from the /etc/hosts file.
 * `erase-net <DOMAIN>` : Erases all virtual networks defined in a domains
@@ -64,6 +85,8 @@ Use the `<action>` variable to manipulate domains in different ways.
 * `export-merge-fast <DOMAIN_DESTINATION> <DOMAIN>` : 'shutdown', export the
   domain, XML and compress the disk copy, Faster than 'export-merge'.
   Reasonable disk image size. Sometimes more compatible than 'export-merge'.
+* `get <CONFIG_TAG>` : Get a variable from the CONFIG file. For example 'vmh
+  get debug'.
 * `import-chain <DOMAIN_DESTINATION> <DOMAIN>` : Define a domain from a
   template XML found in the IMMUTABLE folder. Automatically detects and links
   disk chains to libvirts POOL folder. Also adds as a new disk to the chain.
@@ -84,31 +107,22 @@ Use the `<action>` variable to manipulate domains in different ways.
   chain' to add a new disk to write to. Else libvirt will try to write to the
   immutable disk instead, which is not recommendet. Preferably use '
   import-chain'.
+* `init` : See CONFIG section.
+* `list` : List all available environments.
 * `purge <DOMAIN>` : Remove the disk image with the same name as the domain in
   the POOL folder. Use after 'erase' to remove broken domain and linked disk
   images.
 * `purge-immutable <DOMAIN>` : Remove the disk image with the same name as the
   domain in the IMMUTABLE folder. Also removes the XML file with the same name.
   Useful to clean up exported domains before exporting the same domain again.
+* `set <CONFIG_TAG> <CONFIG_VARIABLE>` : Set a variable in the CONFIG file. For
+  example 'vmh set debug true'.
 * `shutdown <DOMAIN>` : OS shutdown, after 3 minutes do 'destroy'.
 * `start <DOMAIN>` : Boot a VM and continue with shell execution.
 * `start-wait <DOMAIN>` : Same as 'start' and 'wait'.
 * `wait <DOMAIN>` : Wait for an IP and an open SSH port, will block shell
   execution. Timeouts are: get MAC 30 sec., get IP 3 min., get SSH 30 sec. On
   success will automatically add/update the host to the /etc/hosts file.
-* `env-deploy <ENVIRONMENT>` : Smart deploy multible domains in parallel or/and
-  in series. Iterates through the file: `<PATH_IMMUTABLE>/<ENVIRONMENT>.csv` .
-  Will automatical import and start networks from XMLs, found
-  in `<PATH_IMMUTABLE>/networks/<NETWORK>.xml` .
-  See 'ENVIRONMENT FILE STRUCTURE'. Based on 'import-chain-start' and 'wait'.
-* `env-erase <ENVIRONMENT>` : Works in reverse to 'env-deploy'. Based on the
-  action 'erase'. Requires the ENVIRONMENT file.
-* `env-erase-net <ENVIRONMENT>` : Erase all networks found in an environment
-  CSV. Based on the action 'erase-net'. Requires the ENVIRONMENT file.
-* `env-erase-full` : Same as 'env-erase' and then 'env-erase-net' combined.
-* `env-wait <ENVIRONMENT>` : Based on the action 'wait'. Requires the
-  ENVIRONMENT file. Can be used to quickly test/verify an already deployed
-  environment.
 
 ## ENVIRONMENT FILE STRUCTURE
 
@@ -160,15 +174,23 @@ Run:
 
 ## LOGGING
 
-To enable logging
+Log file is /var/log/vmhandler.log
+
+Enable logging
 
     $ vmh-logging-enable
 
-To disable logging
+Disable logging
 
     $ vmh-logging-disable
 
-Log file is /var/log/vmhandler.log
+Watch logs
+
+    $ vmh-watch
+
+Clear logs
+
+    $ vmh-clear-logs
 
 ## COPYRIGHT
 

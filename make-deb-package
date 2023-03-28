@@ -22,7 +22,7 @@ MAN_PAGE=1
 FILE_MAN="$NAME.$MAN_PAGE"
 PATH_BASE="./$RELEASES/$NAME-$VERSION"
 PATH_INSTALL="$PATH_BASE/usr/local"
-PATH_CFG="$PATH_BASE/etc"
+PATH_CFG="$PATH_INSTALL/etc"
 PATH_BASH_COMP="$PATH_BASE/usr/share/bash-completion/completions"
 PATH_BIN="$PATH_INSTALL/bin"
 PATH_SHARE="$PATH_INSTALL/share/$NAME"
@@ -38,9 +38,9 @@ echo "Copying relevant source files"
 mkdir -p "$PATH_SHARE" "$PATH_BIN" "$PATH_MAN" "$PATH_CFG" "$PATH_BASH_COMP"
 cp -t "$PATH_SHARE" "README.md" "copyright" || exit 1
 chmod 0755 "$NAME" "vmh-connect" "vmh-logging-disable" \
-    "vmh-logging-enable" "vmh-log-watch"
+    "vmh-logging-enable" "vmh-clear-logs" "vmh-watch" "vmh-screenshot"
 cp -t "$PATH_BIN" "$NAME" "vmh-connect" "vmh-logging-disable" \
-    "vmh-logging-enable" "vmh-log-watch" || exit 1
+    "vmh-logging-enable" "vmh-clear-logs" "vmh-watch" "vmh-screenshot" || exit 1
 cp -t "$PATH_CFG" "vmh.conf" || exit 1
 cp -t "$PATH_BASH_COMP" "bash_completion/vmh" || exit 1
 
@@ -57,7 +57,17 @@ Version: $VERSION
 Section: admin
 Priority: optional
 Architecture: all
-Depends: libvirt-clients (>=7), rsyslog (>=8), libguestfs-tools (>=1), rsync (>=3.2), waitforit, xmlstarlet (>=1.6), add-to-hosts
+Depends: qemu-kvm,
+ libvirt-clients (>=7),
+ libvirt-daemon-system (>=7),
+ virt-manager,
+ rsyslog (>=8),
+ libguestfs-tools (>=1),
+ rsync (>=3.2),
+ waitforit,
+ xmlstarlet (>=1.6),
+ add-to-hosts,
+ csv2netmap
 Maintainer: Bodo Endres <dev@muspekaren.se>
 Description: $DESCRIPTION
 " >"$PATH_TARGET/control"
