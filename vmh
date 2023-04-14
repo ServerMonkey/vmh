@@ -1266,9 +1266,9 @@ vm_wait() {
 
     # wait for SSH
     info "Waiting for SSH..."
-    # timeout after 30 seconds
+    # timeout after 60 seconds
     local SSH_RESULT
-    SSH_RESULT=$(waitforit "$CORRECT_IP" "" 10 0) || error "$SSH_RESULT"
+    SSH_RESULT=$(waitforit "$CORRECT_IP" "" 20 0) || error "$SSH_RESULT"
 }
 
 vm_poke() {
@@ -1775,7 +1775,7 @@ env_map() {
     local FILE_SVG_NEAT="$PATH_ENVIRONMENTS/$1_neat.svg"
 
     # clean up old file
-    rm -f "$FILE_GVCSV"
+    rm -f "$FILE_GVCSV" "$FILE_MAP" "$FILE_SVG_LIST" "$FILE_SVG_NEAT"
 
     # for each domain
     # shellcheck disable=SC2094
@@ -1794,13 +1794,17 @@ env_map() {
     done <"$FILE_DOMAINS"
 
     # convert to image
-    csv2netmap "$FILE_GVCSV" "$FILE_MAP" || error "csv2netmap"
-    echo "Generate image $1_list.svg ..."
-    dot -Gcharset=latin1 -Ecolor="#22222255" "$FILE_MAP" \
-        -Tsvg >"$FILE_SVG_LIST" || error "dot"
-    echo "Generate image $1_neat.svg ..."
-    neato -Gcharset=latin1 -Ecolor="#22222255" "$FILE_MAP" \
-        -Tsvg >"$FILE_SVG_NEAT" || error "neato"
+    if [ -f "$FILE_GVCSV" ]; then
+        csv2netmap "$FILE_GVCSV" "$FILE_MAP" || error "csv2netmap"
+        echo "Generating image $1_list.svg ..."
+        dot -Gcharset=latin1 -Ecolor="#22222255" "$FILE_MAP" \
+            -Tsvg >"$FILE_SVG_LIST" || error "dot"
+        echo "Generating image $1_neat.svg ..."
+        neato -Gcharset=latin1 -Ecolor="#22222255" "$FILE_MAP" \
+            -Tsvg >"$FILE_SVG_NEAT" || error "neato"
+    else
+        debug "Skip, generating image $1"
+    fi
 
 }
 
