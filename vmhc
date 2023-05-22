@@ -2,13 +2,8 @@
 
 # help
 if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    echo "virt-viewer wrapper"
-    echo ""
-    echo "Example use:"
-    echo "  windowed:   vmh-connect my.domain"
-    echo "  kiosk:      vmh-connect my.domain -k"
-    echo "  fullscreen: vmh-connect my.domain -f"
-    exit 0
+    man vmh.1 || ronn -r <README.md | man -l -
+    exit
 fi
 
 # must run as normal user
@@ -30,9 +25,9 @@ fi
 DOMAIN="$1"
 ARG="$2"
 FULL_ARG=""
-if [ "$ARG" = "-f" ]; then
+if [ "$ARG" = "f" ]; then
     FULL_ARG="-f"
-elif [ "$ARG" = "-k" ]; then
+elif [ "$ARG" = "k" ]; then
     FULL_ARG="-k"
 fi
 

@@ -32,6 +32,8 @@ fi
 
 if [ "$ACTION" = "init" ]; then
     :
+elif [ "$ACTION" = "purge-environments" ]; then
+    :
 elif [ "$ACTION" = "set" ]; then
     SET_CFG="$2"
     SET_VAR="$3"
@@ -821,7 +823,7 @@ vm_export() {
     local PATH_DISK_SRC
     PATH_DISK_SRC=$(get_main_disk_path "$DOM") || exit 1
     debug "PATH_DISK_SRC $PATH_DISK_SRC"
-    local PATH_DISK_DES="$PATH_IMMUTABLE/$DOM_DES"
+    local PATH_DISK_DES="$PATH_IMMUTABLE/$DOM_DES.qcow2"
     debug "PATH_DISK_DES $PATH_DISK_DES"
 
     is_not_exported "$DOM_DES"
@@ -916,6 +918,7 @@ vm_import() {
     TMP_XML=$(mktemp) || error "vm_import mktemp"
     cp -f "$XML_CFG" "$TMP_XML" || error "vm_import copy XML"
     # replace first disk with new name
+    # shellcheck disable=SC2086
     xml_replace "$TMP_XML" "<source file=" \"$DISK_DES\" "/>" 1
     # replace additional libvirt POOL paths with template path
     sed -i "s;$POOL_PLHO;$PATH_POOL/;g" "$TMP_XML"
@@ -1805,7 +1808,33 @@ env_map() {
     else
         debug "Skip, generating image $1"
     fi
+}
 
+env_screenshot() {
+    local FILE_DOMAINS="$PATH_ENVIRONMENTS/$1.csv"
+    debug_funct "env_screenshot $FILE_DOMAINS"
+
+    local DOM_NAME
+    local PATH_SCREENSHOTS
+    local FILE_MONTAGE
+
+    FILE_MONTAGE="$PATH_ENVIRONMENTS/montage_$1.jpg"
+    PATH_SCREENSHOTS="$PATH_ENVIRONMENTS/screenshots"
+    mkdir -p "$PATH_SCREENSHOTS" || error "mkdir $PATH_SCREENSHOTS"
+
+    # for each domain
+    # shellcheck disable=SC2094
+    while read -r line; do
+        DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
+        vmh-screenshot "$DOM_NAME" "$PATH_SCREENSHOTS/$DOM_NAME" ||
+            error vmh-screenshot
+    done <"$FILE_DOMAINS"
+
+    # create overview montage
+    montage -geometry 640x360+4+8 -label '%f' -font CourierNew \
+        -background lightgrey -pointsize 30 -quality 90 \
+        "$PATH_SCREENSHOTS/*" "$FILE_MONTAGE" || error montage
+    echo "Montage saved to: $FILE_MONTAGE"
 }
 
 env_wait() {
@@ -1973,6 +2002,9 @@ list)
 purge)
     vm_purge_pool "$DOMAIN_SRC"
     ;;
+purge-environments)
+    rm -rf "${PATH_ENVIRONMENTS:?}/"*
+    ;;
 purge-immutable)
     vm_purge_immutable "$DOMAIN_SRC"
     ;;
@@ -2027,6 +2059,10 @@ env-erase-full)
 env-map)
     env_check "$DOMAIN_SRC"
     env_map "$DOMAIN_SRC"
+    ;;
+env-screenshot)
+    env_check "$DOMAIN_SRC"
+    env_screenshot "$DOMAIN_SRC"
     ;;
 env-wait)
     env_wait "$DOMAIN_SRC"

@@ -26,7 +26,7 @@ except libvirt.libvirtError as e:
 
 file_out = None
 try:
-    file_out = str(sys.argv[2]) + '.ppm'
+    file_out = str(sys.argv[2])
 except IndexError:
     path_home = os.path.expanduser("~")
     file_out = path_home + "/shot_" + dom.name() + ".ppm"
