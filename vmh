@@ -671,7 +671,7 @@ vm_chain_info() {
     else
         DISKS="Domain not found"
     fi
-    info "(current ) $(pretty_print_chain "$DISKS")"
+    info "(PATH_ENVIRONMENTS) $(pretty_print_chain "$DISKS")"
 
     # check disk in import folder
     local DOM_IMM="$PATH_IMMUTABLE/$DOM"
@@ -683,7 +683,7 @@ vm_chain_info() {
     else
         DISKS_IMM="File not found"
     fi
-    info "(immutable) $(pretty_print_chain "$DISKS_IMM")"
+    info "(PATH_IMMUTABLE   ) $(pretty_print_chain "$DISKS_IMM")"
 }
 
 vm_destroy() {
@@ -833,7 +833,7 @@ vm_export() {
     virsh dumpxml "$DOM" >"$XML_CFG_DES" || error "vm_export dumpxml"
     # replace the first disk with the same name as the domain
     # also add a template path
-    sed -i "s;$PATH_DISK_SRC;$POOL_PLHO$DOM_DES;g" "$XML_CFG_DES"
+    sed -i "s;$PATH_DISK_SRC;$POOL_PLHO$DOM_DES.qcow2;g" "$XML_CFG_DES"
     # replace additional libvirt POOL paths with template path
     sed -i "s;$PATH_POOL/;$POOL_PLHO;g" "$XML_CFG_DES"
     # rename
