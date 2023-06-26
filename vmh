@@ -50,6 +50,8 @@ elif [ "$ACTION" = "get" ]; then
     fi
 elif [ "$ACTION" = "list" ]; then
     :
+elif [ "$ACTION" = "unlink" ]; then
+    :
 elif [ "$ACTION" = "template-add" ]; then
     TEMPLATE_SRC="$2"
 elif [ "$ACTION" = "template-del" ]; then
@@ -111,6 +113,11 @@ require_app virsh
 PATH_POOL=$(virsh pool-dumpxml default | grep -Po "(?<=path\>)[^<]+")
 if [ -z "$PATH_POOL" ]; then
     abort "Can not find default pool"
+fi
+
+# check that PATH_POOL exists
+if [ ! -d "$PATH_POOL" ]; then
+    abort "Pool path does not exist: $PATH_POOL"
 fi
 
 # variable CONF
@@ -1068,7 +1075,7 @@ vm_purge_pool() {
     local DISK_SRC="$PATH_POOL/$DOM"
     if [ -f "$DISK_SRC" ]; then
         info "Deleting disk $DISK_SRC"
-        rm -f "$DISK_SRC" "$DISK_DES" 1>&2 || error "vm_purge_pool"
+        rm -f "$DISK_SRC" 1>&2 || error "vm_purge_pool"
     fi
 }
 
@@ -1810,6 +1817,33 @@ env_map() {
     fi
 }
 
+#env_purge() {
+#    local FILE_DOMAINS="$PATH_ENVIRONMENTS/$1.csv"
+#    debug_funct "env_purge $FILE_DOMAINS"
+#
+#    # verify file
+#    if [ ! -f "$FILE_DOMAINS" ]; then
+#        error "$FILE_DOMAINS does not exist"
+#    fi
+#
+#    local DOM_NAME
+#    local LINE_COUNTER=0
+#    local TOTAL
+#    TOTAL=$(wc -l <"$FILE_DOMAINS")
+#    # for each domain
+#    while read -r line; do
+#        LINE_COUNTER=$((LINE_COUNTER + 1))
+#        DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
+#
+#        # erase domain in parallel
+#        info "Purging $LINE_COUNTER/$TOTAL $DOM_NAME"
+#        # todo: make this a parallel process as well
+#        # todo: also kill all wait and vmh import* processes with the matching domain name
+#        vmh purge "$DOM_NAME" 1>/dev/null 2>&1
+#
+#    done <"$FILE_DOMAINS"
+#}
+
 env_screenshot() {
     local FILE_DOMAINS="$PATH_ENVIRONMENTS/$1.csv"
     debug_funct "env_screenshot $FILE_DOMAINS"
@@ -2031,6 +2065,10 @@ start-wait)
     vm_start "$DOMAIN_SRC"
     vm_wait "$DOMAIN_SRC"
     ;;
+unlink)
+    debug "unlink every file in $PATH_POOL"
+    find "$PATH_POOL" -type l -exec unlink {} \; || abort "unlink $PATH_POOL"
+    ;;
 wait)
     vm_wait "$DOMAIN_SRC"
     ;;
@@ -2082,7 +2120,8 @@ template-del)
     if [ ! -f "$TEMPLATE_DES" ]; then
         echo "already removed $TEMPLATE_DES"
     else
-        echo "delete $TEMPLATE_DES"
+        echo "delete template $TEMPLATE_DES"
+        debug "Delete template $TEMPLATE_DES"
         rm "$TEMPLATE_DES" || error "rm failed"
     fi
     ;;

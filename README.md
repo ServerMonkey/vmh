@@ -129,6 +129,8 @@ Use the `<action>` variable to manipulate domains in different ways.
 * `shutdown <DOMAIN>` : OS shutdown, after 3 minutes do 'destroy'.
 * `start <DOMAIN>` : Boot a VM and continue with shell execution.
 * `start-wait <DOMAIN>` : Same as 'start' and 'wait'.
+* `unlink` : Will unlink all symbolic links in the POOL folder. This will break
+  symlinks. Useful if you want to clean up.
 * `wait <DOMAIN>` : Wait for an IP and an open SSH port, will block shell
   execution. Timeouts are: get MAC 30 sec., get IP 3 min., get SSH 30 sec. On
   success will automatically add/update the host to the /etc/hosts file.
