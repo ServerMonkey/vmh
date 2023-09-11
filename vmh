@@ -1853,7 +1853,7 @@ env_screenshot() {
     local FILE_MONTAGE
 
     FILE_MONTAGE="$PATH_ENVIRONMENTS/montage_$1.jpg"
-    PATH_SCREENSHOTS="$PATH_ENVIRONMENTS/screenshots"
+    PATH_SCREENSHOTS="$PATH_ENVIRONMENTS/$1/screenshots"
     mkdir -p "$PATH_SCREENSHOTS" || error "mkdir $PATH_SCREENSHOTS"
 
     # for each domain
