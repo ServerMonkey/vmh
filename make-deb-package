@@ -67,7 +67,9 @@ Depends: qemu-kvm,
  waitforit,
  xmlstarlet (>=1.6),
  add-to-hosts,
- csv2netmap
+ csv2netmap,
+ sort-by-version,
+ fonts-dejavu-core
 Maintainer: Bodo Endres <dev@muspekaren.se>
 Description: $DESCRIPTION
 " >"$PATH_TARGET/control"
@@ -85,8 +87,10 @@ zip -q -r "$RELEASES/$NAME-$VERSION.source.zip" ./* \
 wait
 
 # replace latest version
-cp "$PATH_BASE.deb" "$RELEASES/$NAME-LATEST.deb"
-cp "$PATH_BASE.source.zip" "$RELEASES/$NAME-LATEST-source.zip"
+cd "$RELEASES" || exit 1
+ln -sf "$NAME-$VERSION.deb" "$NAME-LATEST.deb"
+ln -sf "$NAME-$VERSION.source.zip" "$NAME-LATEST.source.zip"
+cd "$APP_DIR" || exit 1
 
 # clean up
 echo "Clean up"

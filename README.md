@@ -13,6 +13,7 @@ for libvirt and virsh.
 * More automation, e.g. auto shutdown and then force shutdown after a timeout
 * Wait for SSH to become available
 * Logging system (rsyslog)
+* Versioning of libvirt templates
 * Useful for automating kiosk applications that use VMs
 
 ## SYNOPSIS
@@ -27,6 +28,16 @@ for fullscreen.
 `vmh-screenshot <DOMAIN> <OUT_FILE>` : Take a screenshot of a domain in ppm
 format. If the path OUT_FILE is ommited, the screenshot will be saved to
 `$HOME/shot_$DOMAIN.ppm`.
+
+vmh will always install domains to the 'default' libvirt pool. This document
+will refer to this folder as 'POOL'.
+
+The IMMUTABLE folder contains all templates. Is used to store disk images that
+are not supposed to be changed. This folder is also used to store libvirt
+network XMLs. This document will refer to this folder as IMMUTABLE.
+
+To differentiate network templates form domain templates. Network templates
+must have the following filename format: 'libvirt-net-<NETWORK>.xml'
 
 ## OPTIONS
 
@@ -62,7 +73,7 @@ Use the `<action>` variable to manipulate domains in different ways.
 * `env-deploy <ENVIRONMENT>` : Smart deploy multiple domains in parallel or/and
   in series. Iterates through the file: `<PATH_IMMUTABLE>/<ENVIRONMENT>.csv` .
   Will automatically import and start networks from XMLs, found
-  in `<PATH_IMMUTABLE>/networks/<NETWORK>.xml` . See 'ENVIRONMENT FILE
+  in `<PATH_IMMUTABLE>/libvirt-net-<NETWORK>.xml` . See 'ENVIRONMENT FILE
   STRUCTURE'. Based on 'import-chain-start' and 'wait'.
 * `env-erase <ENVIRONMENT>` : Works in reverse to 'env-deploy'. Based on the
   action 'erase'. Requires the ENVIRONMENT file.
@@ -80,10 +91,9 @@ Use the `<action>` variable to manipulate domains in different ways.
 * `erase-net <DOMAIN>` : Erases all virtual networks defined in a domain
   template XML, not the deployed domain. Use this if there are no more domains
   that require a certain network. Or use it if you made changes to a networks
-  XML file, in the `IMMUTABLE/networks` folder. Then reimport the network via
-  'import-...' or 'env-deploy' . Remember domains that where active during
-  deletion of a network, require a full shutdown and start, to reload the new
-  network settings.
+  XML template. Then reimport the network via 'import-...' or 'env-deploy' .
+  Remember domains that where active during deletion of a network, require a
+  full shutdown and start, to reload the new network settings.
 * `export-copy <DESTINATION> <DOMAIN>` : 'shutdown', export the domain, XML and
   an exact disk copy. Will not strip snapshots or old disk data. Largest file.
   Only recommended if image is already compressed. Most compatible.
@@ -118,8 +128,8 @@ Use the `<action>` variable to manipulate domains in different ways.
 * `init` : See CONFIG section.
 * `list` : List all available environments.
 * `purge <DOMAIN>` : Remove the disk image with the same name as the domain in
-  the POOL folder. Use after 'erase' to remove broken domain and linked disk
-  images.
+  the POOL folder. Use after 'erase' to remove a broken domain and linked disk
+  images. Also removes the 'shared' folder and everything in it. Use carefully.
 * `purge-environments` : Removes everything in the PATH_ENVIRONMENTS folder.
 * `purge-immutable <DOMAIN>` : Remove the disk image with the same name as the
   domain in the IMMUTABLE folder. Also removes the XML file with the same name.
@@ -135,6 +145,30 @@ Use the `<action>` variable to manipulate domains in different ways.
   execution. Timeouts are: get MAC 30 sec., get IP 3 min., get SSH 30 sec. On
   success will automatically add/update the host to the /etc/hosts file.
 
+## VERSIONING
+
+The import- and env- actions can also handle versioning of libvirt templates.
+This is also true for the environment files. A specific version can be
+specified by using and underscore followed by the version of the libvirt XML.
+If not specified, the latest version will be used. See the man page of
+sort-by-version(1).
+
+When using a libvirt template, an underscore followed by the version
+number, must be specified. For example 'my-template_1.xml' or
+'my-template_0.3.xml'.
+
+## PLACEHOLDER VARIABLES IN XML
+
+When importing and exporting a domain, the following variables will be replaced
+in the XML file. This is useful if you want to use the same XML file for
+multiple domains.  
+Make sure to use '/' before and after the variable. Else XML verification will
+fail.
+
+* `/POOL_PATH_PLACEHOLDER/` : Will be replaced with the POOL path.
+* `/SHARED_PATH_PLACEHOLDER/` : Will be replaced with the SHARED path
+  /var/lib/libvirt/shared/<DOMAIN_SOURCE>
+
 ## ENVIRONMENT FILE STRUCTURE
 
 Each line represents a single domain. Which consists of three strings/settings,
@@ -146,7 +180,8 @@ separated by a comma.
   and tested for SSH, before the next batch, with the order number '2' is
   deployed.
 * `DOMAIN_NAME` as string : The libvirt name of the domain to deploy to.
-* `DOMAIN_SOURCE` as string : The name of the image to deploy from.
+* `DOMAIN_SOURCE` as string : The name of libvirt template to deploy from.
+  Without the XML. For example 'my-template_1' or 'my-template_0.3'.
 
 ## EXAMPLES
 

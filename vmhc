@@ -1,4 +1,5 @@
 #!/bin/sh
+#info: virt-viewer wrapper
 
 # help
 if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then

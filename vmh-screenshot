@@ -2,6 +2,30 @@
 import sys
 import os
 import libvirt
+from subprocess import PIPE, Popen
+
+
+def shell_cmd(cmd):
+    p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = p.communicate()
+    stdout = str(stdout).rstrip("b''")
+    stderr = str(stderr).rstrip("b''")
+
+    if stderr != '':
+        if stdout != '':
+            print("stdout", "err", stdout)
+        print("stderr", "err", stderr)
+        exit(1)
+    else:
+        return stdout
+
+
+# fix a QEMU bug where the red and blue colors are swapped
+qemu_version = shell_cmd("qemu-system-x86_64 --version")
+if 'version 7.2.2' in qemu_version:
+    fix_colors = True
+else:
+    fix_colors = False
 
 domName = None
 try:
@@ -46,4 +70,12 @@ print('Screenshot saved to: ' + file_out)
 stream.finish()
 
 conn.close()
+
+if fix_colors:
+    file_out_new = file_out + ".tmp"
+    shell_cmd("convert " + file_out + " -recolor '0 0 1, 0 1 0, 1 0 0' " +
+              file_out_new)
+    os.remove(file_out)
+    os.rename(file_out_new, file_out)
+
 exit(0)

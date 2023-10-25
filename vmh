@@ -82,7 +82,7 @@ fi
 
 error() {
     logger -t "vmhandler" "ERROR:   $DOMAIN_SRC: $1"
-    echo "${RED}[$DOMAIN_SRC] aborting, ERROR:${NOCOL} $1" >&2
+    echo "${RED}[$DOMAIN_SRC] ERROR, aborting:${NOCOL} $1" >&2
     exit 1
 }
 
@@ -105,7 +105,13 @@ XML_TAG_DISK_AND_DVD="domain/devices/disk/source/@file"
 XML_TAG_DISK="domain/devices/disk[@device='disk']/source/@file"
 XML_TAG_NET="domain/devices/interface/source/@network"
 
-POOL_PLHO="/POOL_PATH_PLACEHOLDER/"
+# placeholder variables
+PLHO_POOL="/POOL_PATH_PLACEHOLDER/"
+PLHO_SHARED="/SHARED_PATH_PLACEHOLDER/"
+
+# shared folder
+PATH_SHARED_BASE="/var/lib/libvirt/shared"
+PATH_SHARED="$PATH_SHARED_BASE/$DOMAIN_SRC"
 
 require_app virsh
 
@@ -151,7 +157,7 @@ if [ -z "$PATH_ENVIRONMENTS" ]; then
 else
     mkdir -p "$PATH_ENVIRONMENTS" 1>&2 || abort "mkdir $PATH_ENVIRONMENTS"
     # let normal users add files here
-    chown "libvirt-qemu:libvirt-qemu" "$PATH_ENVIRONMENTS"
+    chown "root:root" "$PATH_ENVIRONMENTS"
     chmod 777 "$PATH_ENVIRONMENTS"
 fi
 if [ -z "$ADMIN_NETWORKS" ]; then
@@ -191,7 +197,7 @@ info() {
 }
 
 pretty_print_chain() {
-    echo "--> $1" | head -c -1 | tr '\n' ':' | sed 's/:/ --> /g'
+    echo "--> $1" | head -c -1 | tr '\n' ':' | sed 's|:| --> |g'
 }
 
 debug() {
@@ -393,7 +399,7 @@ get_backing_disks() {
 
     local DISK_CHAIN
     DISK_CHAIN=$(echo "$DISK_DATA" | grep 'backing file:' |
-        sed 's/backing file: //g' | awk '{print $1}')
+        sed 's|backing file: ||g' | awk '{print $1}')
 
     if [ -z "$DISK_CHAIN" ]; then
         debug "$DISK_MAIN has no disk chain"
@@ -412,7 +418,7 @@ get_prevoius_baking_disk() {
     fi
 
     local PREVIOUS_DISK
-    PREVIOUS_DISK=$(echo "$DISK" | sed 's![^_]*$!!' | sed 's/.$//')
+    PREVIOUS_DISK=$(echo "$DISK" | sed 's|[^_]*$||' | sed 's|.$||')
     debug "PREVIOUS_DISK $PREVIOUS_DISK"
 
     # verify
@@ -504,7 +510,7 @@ xml_replace() {
     # shellcheck disable=SC1087
     # replace the $NR occurance of $PREFIX...$SUFFIX with new string $DATA
     tr '\n' '@' <"$TMP_XML" |
-        sed "s:$PREFIX[^<]*$SUFFIX:$PREFIX$DATA$SUFFIX:$NR" |
+        sed "s|$PREFIX[^<]*$SUFFIX|$PREFIX$DATA$SUFFIX|$NR" |
         tr '@' '\n' >"$XML_FILE"
 
     # cleanup
@@ -554,6 +560,55 @@ xml_val() {
     fi
 }
 
+replace() {
+    local STR_IN="$1"
+    local STR_OUT="$2"
+    local FILE="$3"
+
+    [ -n "$STR_IN" ] || error "replace STR_IN is empty"
+    [ -n "$STR_OUT" ] || error "replace STR_OUT is empty"
+    [ -f "$FILE" ] || error "replace FILE does not exist: $FILE"
+
+    sed -i "s|$STR_IN|$STR_OUT|g" "$FILE" ||
+        error "replace $STR_IN --> $STR_OUT in $FILE"
+}
+
+find_template() {
+    local BASE
+    local SEARCH_PATH
+    local VERSION
+    local ERR
+    ERR="find_template:"
+
+    if [ -z "$1" ]; then
+        error "$ERR variable is unset or empty"
+    fi
+
+    BASE=$(basename "$1")
+    SEARCH_PATH="$2"
+
+    # version already defined
+    if echo "$BASE" | grep -q "_"; then
+        VERSION="$BASE.xml"
+    # find the latest version
+    else
+        VERSION=$(find -L "$SEARCH_PATH" -type f -name "$BASE""_*.xml" |
+            sort-by-version)
+    fi
+
+    # abort if VERSION string has multiple lines
+    if [ "$(echo "$VERSION" | wc -l)" -gt 1 ]; then
+        error "$ERR string has too many lines: $VERSION"
+    fi
+
+    if [ -z "$VERSION" ]; then
+        error "$ERR failed to find any version of '$BASE' in '$SEARCH_PATH'"
+    fi
+
+    debug "VERSION $VERSION"
+    echo "$SEARCH_PATH/$VERSION"
+}
+
 config_get() {
     local TAG
     local LINE
@@ -574,9 +629,7 @@ config_set() {
 
     # only set if the line already exists
     config_get "$TAG" 1>/dev/null || exit 1
-
-    sed -i "s;^$TAG=.*;$TAG=$VARIABLE;g" "$CONF" ||
-        abort "cofig_set '$TAG=$VARIABLE' in $CONF"
+    replace "^$TAG=.*" "$TAG=$VARIABLE" "$CONF" || exit 1
 }
 
 disk_copy() {
@@ -673,24 +726,30 @@ vm_chain_info() {
     if is_imported "$DOM"; then
         DISKS=$(get_backing_disks "$PATH_POOL/$DOM")
         if [ -z "$DISKS" ]; then
-            warn_cont "No disk chain found"
+            warn_cont "Deployed: No disk chain found"
+        else
+            info "Deployed: $(pretty_print_chain "$DISKS")"
         fi
     else
-        DISKS="Domain not found"
+        warn_cont "Deployed: Domain not found"
     fi
-    info "(PATH_ENVIRONMENTS) $(pretty_print_chain "$DISKS")"
 
     # check disk in import folder
-    local DOM_IMM="$PATH_IMMUTABLE/$DOM"
+    local DOM_IMM="$PATH_IMMUTABLE/$DOM.xml"
     debug "DOM_IMM $DOM_IMM"
     local DISKS_IMM
     if [ -f "$DOM_IMM" ]; then
         local DISKS_IMM
         DISKS_IMM=$(get_backing_disks "$DOM_IMM")
+        if [ -z "$DISKS_IMM" ]; then
+            info "Template: Has no disk chain"
+        else
+            info "Template: $(pretty_print_chain "$DISKS_IMM")"
+        fi
     else
-        DISKS_IMM="File not found"
+        warn_cont "Template: File not found"
     fi
-    info "(PATH_IMMUTABLE   ) $(pretty_print_chain "$DISKS_IMM")"
+
 }
 
 vm_destroy() {
@@ -808,7 +867,8 @@ vm_erase_net() {
     local DOM="$1"
     debug_funct "vm_erase_net $DOM"
 
-    local XML_CFG="$PATH_IMMUTABLE/$DOM.xml"
+    local XML_CFG
+    XML_CFG=$(find_template "$DOM" "$PATH_IMMUTABLE") || exit 1
 
     # verify initial XML
     xml_val "$XML_CFG"
@@ -840,9 +900,12 @@ vm_export() {
     virsh dumpxml "$DOM" >"$XML_CFG_DES" || error "vm_export dumpxml"
     # replace the first disk with the same name as the domain
     # also add a template path
-    sed -i "s;$PATH_DISK_SRC;$POOL_PLHO$DOM_DES.qcow2;g" "$XML_CFG_DES"
-    # replace additional libvirt POOL paths with template path
-    sed -i "s;$PATH_POOL/;$POOL_PLHO;g" "$XML_CFG_DES"
+    replace "$PATH_DISK_SRC" "$PLHO_POOL$DOM_DES.qcow2" "$XML_CFG_DES"
+    # replace placeholder for pool path
+    replace "$PATH_POOL/" "$PLHO_POOL" "$XML_CFG_DES"
+    # replace placeholder for shared folder
+    replace "$PATH_SHARED$DOM/" "$PLHO_SHARED" "$XML_CFG_DES"
+    replace "$PATH_SHARED/" "$PLHO_SHARED" "$XML_CFG_DES"
     # rename
     xml_set "$XML_CFG_DES" "domain/name" "$DOM_DES"
     # remove title
@@ -858,7 +921,7 @@ vm_export() {
 
     # notify if there is more than one disk
     local DISKS_TOTAL
-    DISKS_TOTAL=$(grep -c "$POOL_PLHO" <"$XML_CFG_DES")
+    DISKS_TOTAL=$(grep -c "$PLHO_POOL" <"$XML_CFG_DES")
     if [ "$DISKS_TOTAL" -gt 1 ]; then
         info "More than one disk present in export, adapt XML manually"
     fi
@@ -897,14 +960,14 @@ vm_import() {
     fi
 
     if is_imported "$DOM_IMP"; then
-        vmh start "$DOM_IMP" 1>/dev/null 2>&1
-        warn "Already imported, start instead"
+        warn "Already imported"
     else
         require_is_not_imported "$DOM_IMP"
     fi
 
     info "Importing $DOM --> $DOM_IMP"
-    local XML_CFG="$PATH_IMMUTABLE/$DOM.xml"
+    local XML_CFG
+    XML_CFG=$(find_template "$DOM" "$PATH_IMMUTABLE") || exit 1
     debug "XML_CFG $XML_CFG"
 
     # verify initial XML
@@ -927,8 +990,16 @@ vm_import() {
     # replace first disk with new name
     # shellcheck disable=SC2086
     xml_replace "$TMP_XML" "<source file=" \"$DISK_DES\" "/>" 1
-    # replace additional libvirt POOL paths with template path
-    sed -i "s;$POOL_PLHO;$PATH_POOL/;g" "$TMP_XML"
+    # replace placeholder for pool path
+    if grep -q "$PLHO_POOL" "$TMP_XML"; then
+        repalce "$PLHO_POOL" "$PATH_POOL/" "$TMP_XML" || exit 1
+    fi
+    # repalce placeholder for shared folder
+    if grep -q "$PLHO_SHARED" "$TMP_XML"; then
+        debug "PATH_SHARED $PATH_SHARED"
+        replace "$PLHO_SHARED" "$PATH_SHARED" "$TMP_XML" || exit 1
+        mkdir -p "$PATH_SHARED" || error "mkdir $PATH_SHARED"
+    fi
     #xml_set "$TMP_XML" "$XML_TAG_DISK" "$DISK_DES"
     # rename domain
     xml_set "$TMP_XML" "domain/name" "$DOM_IMP"
@@ -1354,6 +1425,7 @@ net_map() {
     if [ -z "$XML_CFG" ]; then
         error "net_map empty args XML_CFG"
     fi
+
     XML_CFG_BASE=$(basename "$XML_CFG")
     debug_funct "net_map $XML_CFG $DOM $FILE_MAP"
 
@@ -1361,7 +1433,7 @@ net_map() {
     local DOM_NETS
     local NET
     local COUNTER=0
-    DOM_NETS=$(xml_try_get "$XML_CFG" "$XML_TAG_NET")
+    DOM_NETS=$(xml_try_get "$XML_CFG" "$XML_TAG_NET") || exit 1
 
     # skip if there are no NICs defined
     if [ -z "$DOM_NETS" ]; then
@@ -1398,7 +1470,7 @@ net_action() {
     local DOM_NETS
     local NET
     local COUNTER=0
-    DOM_NETS=$(xml_try_get "$XML_CFG" "$XML_TAG_NET")
+    DOM_NETS=$(xml_try_get "$XML_CFG" "$XML_TAG_NET") || exit 1
 
     # skip if there are no NICs defined
     if [ -z "$DOM_NETS" ]; then
@@ -1471,7 +1543,7 @@ net_start() {
     local BRIDGE
     local VLAN_PATH
     local VLAN_FILTER
-    local INFO_FAIL="network '$NET' failed to "
+    local INFO_FAIL="virtual network '$NET' failed to"
 
     ALL_NETWORKS=$(virsh -q net-list --name) || error "net_start net-list"
     DIS_NETWORKS=$(virsh -q net-list --inactive --name) ||
@@ -1493,16 +1565,18 @@ net_start() {
     else
         debug "network '$NET' missing"
         info "Importing network: $NET"
-        XML_NET_CFG="$PATH_IMMUTABLE/libvirt-net-$NET.xml"
+        XML_NET_CFG=$(find_template "libvirt-net-$NET" "$PATH_IMMUTABLE") ||
+            exit 1
         xml_val "$XML_NET_CFG"
 
         # import network
         virsh -q net-define "$XML_NET_CFG" || error "$INFO_FAIL import"
         virsh -q net-autostart "$NET" || error "$INFO_FAIL autostart"
-        virsh -q net-start "$NET" || error "f$INFO_FAIL start"
+        virsh -q net-start "$NET" || error "$INFO_FAIL start"
 
         # check and enable vlan isolation
-        ISOLATED=$(xml_try_get "$XML_NET_CFG" "network/forward/@mode")
+        ISOLATED=$(xml_try_get "$XML_NET_CFG" "network/forward/@mode") ||
+            exit 1
         if [ -z "$ISOLATED" ]; then
             BRIDGE=$(xml_get "$XML_NET_CFG" "network/bridge/@name") || exit 1
             debug "isolating network bridge '$BRIDGE' via vlan_filtering"
@@ -1568,6 +1642,10 @@ wait_for_domain_batch() {
 }
 
 env_check() {
+    if [ -z "$1" ]; then
+        error "env_check empty args"
+    fi
+
     local FILE_DOMAINS="$PATH_ENVIRONMENTS/$1.csv"
     debug_funct "env_check $FILE_DOMAINS"
 
@@ -1583,8 +1661,9 @@ env_check() {
     local XML_CFG
     local DISKS
     local DISKS_PATHS
-    local M_DISK_SRC
-    local DOM_NETS
+    # todo: remove?
+    # local M_DISK_SRC
+    # local DOM_NETS
 
     # for each domain
     # shellcheck disable=SC2094
@@ -1625,13 +1704,13 @@ env_check() {
             ;;
         esac
 
-        XML_CFG="$PATH_IMMUTABLE/$DOM_SOURCE.xml"
+        XML_CFG=$(find_template "$DOM_SOURCE" "$PATH_IMMUTABLE") || exit 1
         debug "XML_CFG $XML_CFG"
         # verify initial XML
         xml_val "$XML_CFG"
         # find disk chain
         DISKS=$(xml_get "$XML_CFG" "$XML_TAG_DISK_AND_DVD") || exit 1
-        DISKS_PATHS=$(echo "$DISKS" | sed "s;$POOL_PLHO;$PATH_IMMUTABLE/;g")
+        DISKS_PATHS=$(echo "$DISKS" | sed "s|$PLHO_POOL|$PATH_IMMUTABLE/|g")
 
         # verify source disk file
         local i
@@ -1795,7 +1874,7 @@ env_map() {
         DOM_NAME=$(echo "$line" | awk -F',' '{print $2}')
         DOM_SOURCE=$(echo "$line" | awk -F',' '{print $3}')
 
-        XML_CFG="$PATH_IMMUTABLE/$DOM_SOURCE.xml"
+        XML_CFG=$(find_template "$DOM_SOURCE" "$PATH_IMMUTABLE") || exit 1
         debug "XML_CFG $XML_CFG"
 
         # generate network map file
@@ -1865,8 +1944,13 @@ env_screenshot() {
     done <"$FILE_DOMAINS"
 
     # create overview montage
-    montage -geometry 640x360+4+8 -label '%f' -font CourierNew \
-        -background lightgrey -pointsize 30 -quality 90 \
+    montage \
+        -geometry 640x360+4+8 \
+        -label '%f' \
+        -font '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf' \
+        -background lightgrey \
+        -pointsize 30 \
+        -quality 90 \
         "$PATH_SCREENSHOTS/*" "$FILE_MONTAGE" || error montage
     echo "Montage saved to: $FILE_MONTAGE"
 }
@@ -2031,10 +2115,14 @@ init)
     ;;
 list)
     find -L "$PATH_ENVIRONMENTS/"* -maxdepth 0 -type f -printf "%f\n" |
-        sed 's/.csv//g'
+        sed 's|.csv||g'
     ;;
 purge)
     vm_purge_pool "$DOMAIN_SRC"
+    if [ -d "$PATH_SHARED" ]; then
+        info "Deleting $PATH_SHARED"
+        rm -rf "$PATH_SHARED"
+    fi
     ;;
 purge-environments)
     rm -rf "${PATH_ENVIRONMENTS:?}/"*
@@ -2110,6 +2198,9 @@ template-add)
         error "$TEMPLATE_SRC is not a file"
     fi
     TEMPLATE_NAME=$(basename "$TEMPLATE_SRC")
+    if ! echo "$TEMPLATE_NAME" | grep -Lq "_"; then
+        error "$TEMPLATE_NAME requires a version number after an underscore."
+    fi
     TEMPLATE_DES="$PATH_IMMUTABLE/$TEMPLATE_NAME"
     echo "copy $TEMPLATE_NAME -> $TEMPLATE_DES"
     cp -f "$TEMPLATE_SRC" "$TEMPLATE_DES" || error "cp failed"

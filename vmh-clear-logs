@@ -8,5 +8,6 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 echo "" >/var/log/vmhandler.log
+chmod 644 /var/log/vmhandler.log
 
 rm -f /var/log/libvirt/qemu/*.log || true
