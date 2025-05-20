@@ -1,8 +1,0 @@
-#!/bin/sh
-#info: Watch log file
-
-if [ -z "$(command -v ccze)" ]; then
-    watch -t -n 2 -c "tail -n40 /var/log/vmhandler.log"
-else
-    watch -t -n 2 -c "tail -n40 /var/log/vmhandler.log | ccze -A"
-fi

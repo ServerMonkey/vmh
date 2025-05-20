@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/python3
 import sys
 import os
 import libvirt
@@ -19,6 +19,8 @@ def shell_cmd(cmd):
     else:
         return stdout
 
+
+img_no_display = "/usr/local/share/vmh/no-display.ppm"
 
 # fix a QEMU bug where the red and blue colors are swapped
 qemu_version = shell_cmd("qemu-system-x86_64 --version")
@@ -55,8 +57,25 @@ except IndexError:
     path_home = os.path.expanduser("~")
     file_out = path_home + "/shot_" + dom.name() + ".ppm"
 
+
 stream = conn.newStream()
-imageType = dom.screenshot(stream, 0)
+
+try:
+    imageType = dom.screenshot(stream, 0)
+except libvirt.libvirtError as e:
+    # if there is no surface, copy the 'no-display' image
+    if 'no surface' in repr(e):
+        # check if the 'no-display' image exists
+        if not os.path.exists(img_no_display):
+            print('No surface and no ' + img_no_display + ' found')
+            exit(1)
+        shell_cmd("cp " + img_no_display + " " + file_out)
+        print('Empty screenshot (error fallback) to: ' + file_out)
+        conn.close()
+        exit(0)
+    else:
+        print(repr(e), file=sys.stderr)
+        exit(1)
 
 fileHandler = open(file_out, 'wb')
 streamBytes = stream.recv(262120)
@@ -68,7 +87,6 @@ fileHandler.close()
 
 print('Screenshot saved to: ' + file_out)
 stream.finish()
-
 conn.close()
 
 if fix_colors:

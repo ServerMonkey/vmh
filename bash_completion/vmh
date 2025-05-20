@@ -1,2 +1,0 @@
-#!/usr/bin/env bash
-complete -W "chain chain-start chain-start-wait chain-info chain-rebase-immutable destroy env-deploy env-erase env-erase-full env-erase-net env-map env-screenshot env-wait erase erase-net export-copy export-merge export-merge-fast get import-chain import-chain-start import-chain-start-wait import-clone import-link init list purge purge-immutable purge-environments set shutdown start start-wait wait" vmh

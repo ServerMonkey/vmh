@@ -1,6 +1,8 @@
 #!/bin/sh
 #info: virt-viewer wrapper
 
+set -e
+
 # help
 if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     man vmh.1 || ronn -r <README.md | man -l -
@@ -14,14 +16,9 @@ if [ "$(id -u)" = 0 ]; then
 fi
 
 # set default URI
-if [ -z "$LIBVIRT_DEFAULT_URI" ]; then
-    export LIBVIRT_DEFAULT_URI="qemu:///system"
-fi
-
+[ -n "$LIBVIRT_DEFAULT_URI" ] || export LIBVIRT_DEFAULT_URI="qemu:///system"
 # set default display
-if [ -z "$DISPLAY" ]; then
-    export DISPLAY=:0
-fi
+[ -n "$DISPLAY" ] || export DISPLAY=:0
 
 DOMAIN="$1"
 ARG="$2"
@@ -48,33 +45,9 @@ info() {
     echo "INFO: $DOMAIN: $1" >&2
 }
 
-webinfo() {
-    echo "$1"
-}
-
 # verify input
-if [ -z "$DOMAIN" ]; then
-    error "Must specify a DOMAIN"
-fi
+[ -z "$DOMAIN" ] && error "Must specify a DOMAIN"
 
-#is_running() {
-#	if [ -z "$1" ]; then
-#		error "is_running: variable is unset or empty"
-#	fi
-#
-#	# shellcheck disable=SC2009
-#	if ps -ef | grep qemu-system-x86_64 | grep -qx "guest=$1"; then
-#		return 0
-#	else
-#		return 1
-#	fi
-#}
-#if [ -z "$FULL_ARG" ]; then
-#    if ! is_running "$DOMAIN"; then
-#        error "Domain is not running"
-#    fi
-#fi
-
-info "trying to connect to: $DOMAIN"
+info "Trying to connect"
 # shellcheck disable=SC2086
 virt-viewer "$DOMAIN" --reconnect --wait $FULL_ARG 1>/dev/null 2>/dev/null &

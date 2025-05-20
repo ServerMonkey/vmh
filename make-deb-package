@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 # run from anywhere
 APP_DIR_FULL=$(realpath "$0")
 APP_DIR=$(dirname "$APP_DIR_FULL")
@@ -21,13 +23,13 @@ TARGET="DEBIAN"
 MAN_PAGE=1
 FILE_MAN="$NAME.$MAN_PAGE"
 PATH_BASE="./$RELEASES/$NAME-$VERSION"
-PATH_INSTALL="$PATH_BASE/usr/local"
-PATH_CFG="$PATH_INSTALL/etc"
+PATH_INSTALL="$PATH_BASE"
 PATH_BASH_COMP="$PATH_BASE/usr/share/bash-completion/completions"
+FILE_BASH_COMP="$PATH_BASH_COMP/$NAME"
 PATH_BIN="$PATH_INSTALL/bin"
-PATH_SHARE="$PATH_INSTALL/share/$NAME"
+PATH_SHARE="$PATH_INSTALL/usr/share/$NAME"
 PATH_TARGET="$PATH_BASE/$TARGET"
-PATH_MAN="$PATH_INSTALL/share/man/man$MAN_PAGE"
+PATH_MAN="$PATH_INSTALL/usr/share/man/man$MAN_PAGE"
 
 # delete the old build
 echo "Cleaning up old build"
@@ -35,14 +37,18 @@ rm -rf "$PATH_BASE"
 
 # copy relevant files from source to release
 echo "Copying relevant source files"
-mkdir -p "$PATH_SHARE" "$PATH_BIN" "$PATH_MAN" "$PATH_CFG" "$PATH_BASH_COMP"
-cp -t "$PATH_SHARE" "README.md" "copyright" || exit 1
-chmod 0755 "$NAME" "vmhc" "vmh-logging-disable" \
-    "vmh-logging-enable" "vmh-clear-logs" "vmh-watch" "vmh-screenshot"
-cp -t "$PATH_BIN" "$NAME" "vmhc" "vmh-logging-disable" \
-    "vmh-logging-enable" "vmh-clear-logs" "vmh-watch" "vmh-screenshot" || exit 1
-cp -t "$PATH_CFG" "vmh.conf" || exit 1
-cp -t "$PATH_BASH_COMP" "bash_completion/vmh" || exit 1
+mkdir -p "$PATH_SHARE" "$PATH_BIN" "$PATH_MAN" "$PATH_BASH_COMP"
+cp -t "$PATH_SHARE" "README.md" "copyright" "no-display.ppm" "vmh.conf" || exit 1
+chmod 0755 "$NAME" "virt-viewer-easy" "virt-screenshot"
+cp -t "$PATH_BIN" "$NAME" "virt-viewer-easy" "virt-screenshot" || exit 1
+
+# auto generate bash completion
+echo "#!/usr/bin/env bash" >"$FILE_BASH_COMP"
+# shellcheck disable=SC2129
+echo "complete -W \"" >>"$FILE_BASH_COMP"
+grep -A 1000 '# select program' <"$NAME" | grep -B 1000 'Unknown action' |
+    grep ')' | grep '^[-a-z]' | tr -d ')' >>"$FILE_BASH_COMP"
+echo "\" $NAME" >>"$FILE_BASH_COMP"
 
 # build man page
 ronn -r <"$README" | gzip -9n >"$PATH_MAN/$FILE_MAN" || exit 1
@@ -60,6 +66,7 @@ Architecture: all
 Depends: qemu-kvm,
  libvirt-clients (>=7),
  libvirt-daemon-system (>=7),
+ virt-auto-expand,
  virt-manager,
  rsyslog (>=8),
  libguestfs-tools (>=1),
@@ -68,8 +75,11 @@ Depends: qemu-kvm,
  xmlstarlet (>=1.6),
  add-to-hosts,
  csv2netmap,
+ csvkit (>=1),
  sort-by-version,
- fonts-dejavu-core
+ fonts-dejavu-core,
+ bc,
+ python3:any | python3-minimal:any
 Maintainer: Bodo Endres <dev@muspekaren.se>
 Description: $DESCRIPTION
 " >"$PATH_TARGET/control"
